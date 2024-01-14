@@ -7,7 +7,7 @@ import (
 
 func main() {
 	yt := youtube.NewYoutubeAPI()
-	url, err := yt.GetYoutubeStreamURL("foo")
+	url, err := yt.GetYoutubeStreamURL("dQw4w9WgXcQ")
 
 	if err != nil {
 		panic(err)
