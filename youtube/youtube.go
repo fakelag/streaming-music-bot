@@ -2,7 +2,7 @@ package youtube
 
 import (
 	"errors"
-	"musicbot/cmd"
+	cmd "musicbot/command"
 	"os/exec"
 	"runtime"
 	"strings"
