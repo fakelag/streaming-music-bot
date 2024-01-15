@@ -1,13 +1,30 @@
 package youtube
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
 	cmd "musicbot/command"
+	"musicbot/utils"
 	"os/exec"
 	"runtime"
 	"strings"
 	"time"
 )
+
+type YtDlpObject struct {
+	// "playlist", "video"
+	Type string `json:"_type"`
+}
+
+type YtDlpVideo struct {
+	YtDlpObject
+	ID           string `json:"id"`
+	Title        string `json:"fulltitle"`
+	Duration     int    `json:"duration"`
+	Thumbnail    string `json:"thumbnail"`
+	IsLiveStream bool   `json:"is_live"`
+}
 
 type Youtube struct {
 	executor         cmd.CommandExecutor
@@ -23,11 +40,11 @@ func NewYoutubeAPI() *Youtube {
 	return yt
 }
 
-func (yt *Youtube) GetYoutubeStreamURL(videoIdOrSearchTerm string) (string, error) {
+func (yt *Youtube) GetYoutubeMedia(videoIdOrSearchTerm string) (*YoutubeMedia, error) {
 	ytDlp, err := getYtDlpPath()
 
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	useSearch := true
@@ -70,23 +87,51 @@ func (yt *Youtube) GetYoutubeStreamURL(videoIdOrSearchTerm string) (string, erro
 		stdout = *result
 		break
 	case err := <-errorChannel:
-		return "", err
+		return nil, err
 	}
 
 	if len(stdout) == 0 {
-		return "", errors.New("No video found or its too long")
+		return nil, errors.New("No video found")
 	}
 
 	urlAndJson := strings.Split(stdout, "\n")
-	url := urlAndJson[0]
-	// TODO extract metadata
-	// json := urlAndJson[1]
+
+	if len(urlAndJson) < 2 {
+		firstString := ""
+		if len(urlAndJson) > 0 {
+			firstString = urlAndJson[0]
+		}
+		return nil, errors.New(fmt.Sprintf("Invalid video json data: %s", utils.TruncateString(firstString, 50, "...")))
+	}
+
+	videoStreamURL := urlAndJson[0]
+	videoJson := urlAndJson[1]
+
+	var object YtDlpObject
+	if err := json.Unmarshal([]byte(videoJson), &object); err != nil {
+		return nil, err
+	}
 
 	// url expiration timestamp format
 	// https://manifest.googlevideo.com/api/manifest/hls_playlist/expire/0000000000/ei/
 	// https://rr5---sn-qo5-ixas.googlevideo.com/videoplayback?expire=0000000000&ei=
 
-	return url, nil
+	if object.Type == "video" {
+		var ytDlpVideo YtDlpVideo
+		if err := json.Unmarshal([]byte(videoJson), &ytDlpVideo); err != nil {
+			return nil, err
+		}
+
+		media := &YoutubeMedia{
+			ID:        ytDlpVideo.ID,
+			Title:     ytDlpVideo.Title,
+			StreamURL: videoStreamURL,
+		}
+
+		return media, nil
+	} else {
+		return nil, errors.New(fmt.Sprintf("Unrecognised object type %s", object.Type))
+	}
 }
 
 func getYtDlpPath() (string, error) {

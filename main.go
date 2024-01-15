@@ -7,12 +7,12 @@ import (
 
 func main() {
 	yt := youtube.NewYoutubeAPI()
-	url, err := yt.GetYoutubeStreamURL("dQw4w9WgXcQ")
+	media, err := yt.GetYoutubeMedia("dQw4w9WgXcQ")
 
 	if err != nil {
 		panic(err)
 	}
 
-	fmt.Printf("url=%s\n", url)
+	fmt.Printf("media=%+v\n", media)
 	return
 }
