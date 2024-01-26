@@ -7,7 +7,9 @@ import (
 	cmd "musicbot/command"
 	"musicbot/utils"
 	"os/exec"
+	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -27,14 +29,16 @@ type YtDlpVideo struct {
 }
 
 type Youtube struct {
-	executor         cmd.CommandExecutor
-	streamUrlTimeout time.Duration
+	executor             cmd.CommandExecutor
+	streamUrlTimeout     time.Duration
+	streamUrlExpireRegex *regexp.Regexp
 }
 
 func NewYoutubeAPI() *Youtube {
 	yt := &Youtube{
-		executor:         &cmd.DefaultCommandExecutor{},
-		streamUrlTimeout: time.Second * 30,
+		executor:             &cmd.DefaultCommandExecutor{},
+		streamUrlTimeout:     time.Second * 30,
+		streamUrlExpireRegex: regexp.MustCompile("(expire)(\\/|=)(\\d+)(\\/|=|&|$)"),
 	}
 
 	return yt
@@ -112,10 +116,6 @@ func (yt *Youtube) GetYoutubeMedia(videoIdOrSearchTerm string) (*YoutubeMedia, e
 		return nil, err
 	}
 
-	// url expiration timestamp format
-	// https://manifest.googlevideo.com/api/manifest/hls_playlist/expire/0000000000/ei/
-	// https://rr5---sn-qo5-ixas.googlevideo.com/videoplayback?expire=0000000000&ei=
-
 	if object.Type == "video" {
 		var ytDlpVideo YtDlpVideo
 		if err := json.Unmarshal([]byte(videoJson), &ytDlpVideo); err != nil {
@@ -126,6 +126,16 @@ func (yt *Youtube) GetYoutubeMedia(videoIdOrSearchTerm string) (*YoutubeMedia, e
 			ID:        ytDlpVideo.ID,
 			Title:     ytDlpVideo.Title,
 			StreamURL: videoStreamURL,
+		}
+
+		streamExpireUnixSecondsMatch := yt.streamUrlExpireRegex.FindStringSubmatch(videoStreamURL)
+
+		if len(streamExpireUnixSecondsMatch) >= 4 {
+			unixSeconds, err := strconv.ParseInt(streamExpireUnixSecondsMatch[3], 10, 64)
+
+			if err == nil && unixSeconds > 0 {
+				media.StreamExpiresAt = time.Unix(unixSeconds, 0)
+			}
 		}
 
 		return media, nil

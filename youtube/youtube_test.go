@@ -49,9 +49,8 @@ var _ = Describe("Downloading from YT", func() {
 			MockStdoutResult: "url123\n" + mockVideoJson,
 		}
 
-		yt := &Youtube{
-			executor: mockExecutor,
-		}
+		yt := NewYoutubeAPI()
+		yt.executor = mockExecutor
 
 		media, err := yt.GetYoutubeMedia("foo")
 		Expect(err).To(BeNil())
@@ -60,15 +59,34 @@ var _ = Describe("Downloading from YT", func() {
 		Expect(media.StreamURL).To(Equal("url123"))
 	})
 
+	It("Parses stream expiration url correctly", func() {
+		var timeUnix int64 = 1706280000
+		for _, streamUrl := range []string{
+			"https://manifest.googlevideo.com/api/manifest/hls_playlist/expire/" + fmt.Sprintf("%d", timeUnix) + "/ei&foo=bar\n",
+			"https://rr5---sn-qo5-ixas.googlevideo.com/videoplayback?expire=" + fmt.Sprintf("%d", timeUnix) + "&ei=123&foo=bar\n",
+		} {
+			mockExecutor := &MockCommandExecutor{
+				MockStdoutResult: streamUrl + mockVideoJson,
+			}
+
+			yt := NewYoutubeAPI()
+			yt.executor = mockExecutor
+
+			media, err := yt.GetYoutubeMedia("foo")
+			Expect(err).To(BeNil())
+			Expect(mockExecutor.MockStdoutResult).To(ContainSubstring(media.StreamURL))
+			Expect(media.StreamExpiresAt).To(BeTemporally("~", time.Unix(timeUnix, 0), time.Second))
+		}
+	})
+
 	It("Fails with a sensible error if the download fails with an exit code", func() {
 		mockExecutor := &MockCommandExecutor{
 			MockStdoutResult: "",
 			MockExitCode:     1,
 		}
 
-		yt := &Youtube{
-			executor: mockExecutor,
-		}
+		yt := NewYoutubeAPI()
+		yt.executor = mockExecutor
 
 		_, err := yt.GetYoutubeMedia("foo")
 		Expect(err).To(MatchError("exit status 1"))
@@ -79,9 +97,8 @@ var _ = Describe("Downloading from YT", func() {
 			MockStdoutResult: "url123\n{",
 		}
 
-		yt := &Youtube{
-			executor: mockExecutor,
-		}
+		yt := NewYoutubeAPI()
+		yt.executor = mockExecutor
 
 		_, err := yt.GetYoutubeMedia("foo")
 		Expect(err).To(MatchError("unexpected end of JSON input"))
