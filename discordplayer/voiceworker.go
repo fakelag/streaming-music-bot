@@ -34,9 +34,9 @@ func (dms *DiscordMusicSession) voiceWorker() {
 func (dms *DiscordMusicSession) playMediaFile(mediaFile entities.Media) error {
 	// TODO check voice connection OK
 
-	_ = dms.voiceConnection.Speaking(true)
+	fmt.Printf("Playing: %s - %t\n", mediaFile.FileURL(), dms.voiceConnection.IsReady())
 
-	fmt.Printf("Playing: %s - %t\n", mediaFile.FileURL(), dms.voiceConnection.Ready)
+	_ = dms.voiceConnection.Speaking(true)
 
 	session, err := dms.playUrlInDiscord(mediaFile.FileURL(), time.Duration(0))
 
@@ -69,7 +69,7 @@ func (dms *DiscordMusicSession) playUrlInDiscord(url string, startPlaybackAt tim
 	options.Application = "lowdelay"
 	options.StartTime = int(startPlaybackAt.Seconds())
 
-	encodingSession, err := dca.EncodeFile(url, options)
+	encodingSession, err := dms.dca.EncodeFile(url, options)
 
 	if err != nil {
 		return nil, err
@@ -78,7 +78,7 @@ func (dms *DiscordMusicSession) playUrlInDiscord(url string, startPlaybackAt tim
 	done := make(chan error)
 
 	time.Sleep(250 * time.Millisecond)
-	streamingSession := dca.NewStream(encodingSession, dms.voiceConnection, done)
+	streamingSession := dms.dca.NewStream(encodingSession, dms.voiceConnection, done)
 
 	return &DcaMediaSession{
 		encodingSession:  encodingSession,

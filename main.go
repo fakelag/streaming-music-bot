@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	discordplayer "musicbot/discordplayer"
+	"musicbot/youtube"
 	"os"
 	"os/signal"
 	"time"
@@ -39,14 +40,12 @@ func main() {
 
 	defer discord.Close()
 
-	// yt := youtube.NewYoutubeAPI()
-	// media, err := yt.GetYoutubeMedia("dQw4w9WgXcQ")
+	yt := youtube.NewYoutubeAPI()
+	media, err := yt.GetYoutubeMedia("dQw4w9WgXcQ")
 
-	// if err != nil {
-	// 	panic(err)
-	// }
-
-	// fmt.Printf("media=%+v\n", media)
+	if err != nil {
+		panic(err)
+	}
 
 	time.Sleep(2 * time.Second)
 	fmt.Println("Running...")
@@ -60,13 +59,18 @@ func main() {
 		}
 	}
 
-	dms, err := discordplayer.NewDiscordMusicSession(discord, guild.ID, channelID)
+	dms, err := discordplayer.NewDiscordMusicSession(
+		discordplayer.NewDiscordAudio(),
+		discordplayer.NewDiscordSession(discord),
+		guild.ID,
+		channelID,
+	)
 
 	if err != nil {
 		panic(err)
 	}
 
-	// dms.EnqueueMedia(media)
+	dms.EnqueueMedia(media)
 
 	waitSigTerm()
 

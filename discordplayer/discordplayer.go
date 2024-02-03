@@ -3,20 +3,25 @@ package discordplayer
 import (
 	"musicbot/entities"
 	"sync"
-
-	"github.com/bwmarrin/discordgo"
 )
 
 type DiscordMusicSession struct {
 	mutex sync.RWMutex
 
 	voiceChannelID  string
-	voiceConnection *discordgo.VoiceConnection
+	voiceConnection DiscordVoiceConnection
+
+	dca DiscordAudio
 
 	mediaQueue []entities.Media
 }
 
-func NewDiscordMusicSession(discord *discordgo.Session, guildId string, voiceChannelID string) (*DiscordMusicSession, error) {
+func NewDiscordMusicSession(
+	dca DiscordAudio,
+	discord DiscordSession,
+	guildId string,
+	voiceChannelID string,
+) (*DiscordMusicSession, error) {
 	voiceConnection, err := discord.ChannelVoiceJoin(guildId, voiceChannelID, false, false)
 
 	if err != nil {
@@ -26,6 +31,7 @@ func NewDiscordMusicSession(discord *discordgo.Session, guildId string, voiceCha
 	dms := &DiscordMusicSession{
 		voiceChannelID:  voiceChannelID,
 		voiceConnection: voiceConnection,
+		dca:             dca,
 		mediaQueue:      make([]entities.Media, 0),
 	}
 
