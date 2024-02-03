@@ -8,10 +8,12 @@ import (
 )
 
 type DiscordMusicSession struct {
-	rwmutex sync.RWMutex
+	mutex sync.RWMutex
 
 	voiceChannelID  string
 	voiceConnection *discordgo.VoiceConnection
+
+	mediaQueue []entities.Media
 }
 
 func NewDiscordMusicSession(discord *discordgo.Session, guildId string, voiceChannelID string) (*DiscordMusicSession, error) {
@@ -24,6 +26,7 @@ func NewDiscordMusicSession(discord *discordgo.Session, guildId string, voiceCha
 	dms := &DiscordMusicSession{
 		voiceChannelID:  voiceChannelID,
 		voiceConnection: voiceConnection,
+		mediaQueue:      make([]entities.Media, 0),
 	}
 
 	go dms.voiceWorker()
@@ -32,6 +35,10 @@ func NewDiscordMusicSession(discord *discordgo.Session, guildId string, voiceCha
 }
 
 func (dms *DiscordMusicSession) EnqueueMedia(media entities.Media) {
+	dms.mutex.Lock()
+	defer dms.mutex.Unlock()
+
+	dms.mediaQueue = append(dms.mediaQueue, media)
 }
 
 func (dms *DiscordMusicSession) StartPlaylist(playlist entities.Playlist) {

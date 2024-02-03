@@ -1,6 +1,9 @@
 package youtube
 
-import "time"
+import (
+	"musicbot/entities"
+	"time"
+)
 
 type YoutubeMedia struct {
 	ID              string
@@ -9,6 +12,9 @@ type YoutubeMedia struct {
 	StreamExpiresAt time.Time
 }
 
+func (ytm *YoutubeMedia) FileURL() string {
+	return ytm.StreamURL
+}
+
 // Verify implements entities.Media
-// var _ entities.Media = YoutubeMedia{}
-// var _ entities.Media = (*YoutubeMedia)(nil)
+var _ entities.Media = (*YoutubeMedia)(nil)
