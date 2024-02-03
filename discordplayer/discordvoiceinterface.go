@@ -5,6 +5,7 @@ import "github.com/bwmarrin/discordgo"
 type DiscordVoiceConnection interface {
 	Speaking(b bool) error
 	IsReady() bool
+	Disconnect() error
 	GetRaw() *discordgo.VoiceConnection
 }
 
@@ -18,6 +19,10 @@ func (dvc *DefaultDiscordVoiceConnection) Speaking(b bool) error {
 
 func (dvc *DefaultDiscordVoiceConnection) IsReady() bool {
 	return dvc.voiceConn.Ready
+}
+
+func (dvc *DefaultDiscordVoiceConnection) Disconnect() error {
+	return dvc.voiceConn.Disconnect()
 }
 
 func (dvc *DefaultDiscordVoiceConnection) GetRaw() *discordgo.VoiceConnection {

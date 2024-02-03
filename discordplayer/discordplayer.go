@@ -14,6 +14,8 @@ type DiscordMusicSession struct {
 	dca DiscordAudio
 
 	mediaQueue []entities.Media
+
+	chanLeaveCommand chan bool
 }
 
 func NewDiscordMusicSession(
@@ -29,10 +31,11 @@ func NewDiscordMusicSession(
 	}
 
 	dms := &DiscordMusicSession{
-		voiceChannelID:  voiceChannelID,
-		voiceConnection: voiceConnection,
-		dca:             dca,
-		mediaQueue:      make([]entities.Media, 0),
+		voiceChannelID:   voiceChannelID,
+		voiceConnection:  voiceConnection,
+		dca:              dca,
+		mediaQueue:       make([]entities.Media, 0),
+		chanLeaveCommand: make(chan bool, 1),
 	}
 
 	go dms.voiceWorker()
@@ -60,4 +63,10 @@ func (dms *DiscordMusicSession) Skip() {
 }
 
 func (dms *DiscordMusicSession) Leave() {
+	dms.mutex.Lock()
+	defer dms.mutex.Unlock()
+
+	if len(dms.chanLeaveCommand) == 0 {
+		dms.chanLeaveCommand <- true
+	}
 }

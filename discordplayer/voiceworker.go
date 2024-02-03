@@ -16,22 +16,38 @@ type DcaMediaSession struct {
 }
 
 func (dms *DiscordMusicSession) voiceWorker() {
+workerloop:
 	for {
 		mediaFile := dms.nextMediaFile()
 
 		if mediaFile != nil {
-			err := dms.playMediaFile(mediaFile)
+			err, keepPlaying := dms.playMediaFile(mediaFile)
 
 			if err != nil {
 				panic(err)
 			}
+
+			if !keepPlaying {
+				break workerloop
+			}
+		}
+
+		select {
+		case <-dms.chanLeaveCommand:
+			fmt.Printf("Bot asked to leave while idle\n")
+			break workerloop
+		default:
+			break
 		}
 
 		time.Sleep(50 * time.Millisecond)
 	}
+
+	fmt.Printf("Exiting voice channel %s\n", dms.voiceChannelID)
+	dms.voiceConnection.Disconnect()
 }
 
-func (dms *DiscordMusicSession) playMediaFile(mediaFile entities.Media) error {
+func (dms *DiscordMusicSession) playMediaFile(mediaFile entities.Media) (err error, keepPlaying bool) {
 	// TODO check voice connection OK
 
 	fmt.Printf("Playing: %s - %t\n", mediaFile.FileURL(), dms.voiceConnection.IsReady())
@@ -41,7 +57,7 @@ func (dms *DiscordMusicSession) playMediaFile(mediaFile entities.Media) error {
 	session, err := dms.playUrlInDiscord(mediaFile.FileURL(), time.Duration(0))
 
 	if err != nil {
-		return err
+		return err, true
 	}
 
 	select {
@@ -55,10 +71,18 @@ func (dms *DiscordMusicSession) playMediaFile(mediaFile entities.Media) error {
 		_ = dms.voiceConnection.Speaking(false)
 
 		if err != nil && err != io.EOF {
-			return err
+			return err, true
 		}
 
-		return nil
+		return nil, true
+	case <-dms.chanLeaveCommand:
+		fmt.Printf("Bot asked to leave while playing\n")
+
+		if session.encodingSession != nil {
+			session.encodingSession.Cleanup()
+		}
+
+		return nil, false
 	}
 }
 
