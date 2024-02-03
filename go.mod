@@ -7,6 +7,7 @@ require (
 	github.com/fakelag/dca v0.0.0-20240203132156-50ee24c5b93d
 	github.com/onsi/ginkgo/v2 v2.14.0
 	github.com/onsi/gomega v1.30.0
+	go.uber.org/mock v0.4.0
 )
 
 require (
