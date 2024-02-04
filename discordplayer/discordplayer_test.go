@@ -9,7 +9,7 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"musicbot/discordplayer"
-	. "musicbot/mock_discordplayer"
+	. "musicbot/discordplayer/mocks"
 )
 
 type MockMedia struct {
