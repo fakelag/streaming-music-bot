@@ -16,12 +16,7 @@ type DcaMediaSession struct {
 }
 
 func (dms *DiscordMusicSession) voiceWorker() {
-	if dms.isWorkerActive() {
-		return
-	}
-
-	dms.setWorkerActive(true)
-	defer dms.setWorkerActive(false)
+	defer dms.disconnectAndExitWorker()
 
 	voiceConnection, err := dms.discordSession.ChannelVoiceJoin(dms.guildID, dms.voiceChannelID, false, false)
 
@@ -57,9 +52,6 @@ workerloop:
 
 		time.Sleep(50 * time.Millisecond)
 	}
-
-	fmt.Printf("Exiting voice channel %s\n", dms.voiceChannelID)
-	dms.voiceConnection.Disconnect()
 }
 
 func (dms *DiscordMusicSession) playMediaFile(mediaFile entities.Media) (err error, keepPlaying bool) {
@@ -142,10 +134,15 @@ func (dms *DiscordMusicSession) consumeNextMediaFile() entities.Media {
 	return nextMediaFile
 }
 
-func (dms *DiscordMusicSession) setWorkerActive(active bool) {
+func (dms *DiscordMusicSession) disconnectAndExitWorker() {
 	dms.mutex.Lock()
 	defer dms.mutex.Unlock()
-	dms.workerActive = active
+
+	dms.workerActive = false
+	dms.mediaQueue = make([]entities.Media, 0)
+	dms.voiceConnection.Disconnect()
+
+	fmt.Printf("Exiting voice channel %s\n", dms.voiceChannelID)
 }
 
 func (dms *DiscordMusicSession) isWorkerActive() bool {

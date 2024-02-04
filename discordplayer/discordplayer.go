@@ -83,6 +83,7 @@ func (dms *DiscordMusicSession) EnqueueMedia(media entities.Media) error {
 
 	if !dms.workerActive {
 		go dms.voiceWorker()
+		dms.workerActive = true
 	}
 
 	return nil
