@@ -56,10 +56,10 @@ func (mr *MockDiscordAudioMockRecorder) EncodeFile(path, options any) *gomock.Ca
 }
 
 // NewStream mocks base method.
-func (m *MockDiscordAudio) NewStream(source dca.OpusReader, vc discordinterface.DiscordVoiceConnection, done chan error) *dca.StreamingSession {
+func (m *MockDiscordAudio) NewStream(source dca.OpusReader, vc discordinterface.DiscordVoiceConnection, done chan error) discordinterface.DcaStreamingSession {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "NewStream", source, vc, done)
-	ret0, _ := ret[0].(*dca.StreamingSession)
+	ret0, _ := ret[0].(discordinterface.DcaStreamingSession)
 	return ret0
 }
 

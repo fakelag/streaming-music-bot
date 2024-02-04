@@ -8,12 +8,25 @@ import (
 type YoutubeMedia struct {
 	ID              string
 	Title           string
+	IsLiveStream    bool
+	VideoDuration   time.Duration
 	StreamURL       string
 	StreamExpiresAt time.Time
 }
 
 func (ytm *YoutubeMedia) FileURL() string {
 	return ytm.StreamURL
+}
+
+func (ytm *YoutubeMedia) CanReloadFromTimeStamp() bool {
+	return !ytm.IsLiveStream
+}
+
+func (ytm *YoutubeMedia) Duration() *time.Duration {
+	if ytm.IsLiveStream {
+		return nil
+	}
+	return &ytm.VideoDuration
 }
 
 // Verify implements entities.Media

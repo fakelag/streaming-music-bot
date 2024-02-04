@@ -5,15 +5,16 @@ import (
 )
 
 type DiscordAudio interface {
-	NewStream(source dca.OpusReader, vc DiscordVoiceConnection, done chan error) *dca.StreamingSession
+	NewStream(source dca.OpusReader, vc DiscordVoiceConnection, done chan error) DcaStreamingSession
 	EncodeFile(path string, options *dca.EncodeOptions) (session *dca.EncodeSession, err error)
 }
 
 type DefaultDiscordAudio struct {
 }
 
-func (dda *DefaultDiscordAudio) NewStream(source dca.OpusReader, vc DiscordVoiceConnection, done chan error) *dca.StreamingSession {
-	return dca.NewStream(source, vc.GetRaw(), done)
+func (dda *DefaultDiscordAudio) NewStream(source dca.OpusReader, vc DiscordVoiceConnection, done chan error) DcaStreamingSession {
+	dcaStreamingSession := dca.NewStream(source, vc.GetRaw(), done)
+	return NewDcaStreamingSession(dcaStreamingSession)
 }
 
 func (dda *DefaultDiscordAudio) EncodeFile(path string, options *dca.EncodeOptions) (session *dca.EncodeSession, err error) {

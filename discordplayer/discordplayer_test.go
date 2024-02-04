@@ -1,9 +1,11 @@
 package discordplayer_test
 
 import (
+	"errors"
 	"sync"
 	"time"
 
+	"github.com/fakelag/dca"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"go.uber.org/mock/gomock"
@@ -14,22 +16,38 @@ import (
 )
 
 type MockMedia struct {
+	DisableReloadFromTS bool
 }
 
 func (mm *MockMedia) FileURL() string {
 	return "mockurl"
 }
 
+func (mm *MockMedia) CanReloadFromTimeStamp() bool {
+	return !mm.DisableReloadFromTS
+}
+
+func (mm *MockMedia) Duration() *time.Duration {
+	oneMinute := 1 * time.Minute
+	return &oneMinute
+}
+
 type JoinVoiceAndPlayContext struct {
 	mockVoiceConnection *MockDiscordVoiceConnection
 	mockDiscordSession  *MockDiscordSession
+	mockDca             *MockDiscordAudio
 	dms                 *discordplayer.DiscordMusicSession
 	mockMedia           *MockMedia
 	guildID             string
 	channelID           string
 }
 
-func JoinMockVoiceChannelAndPlay(ctrl *gomock.Controller, currentMediaDone chan error, enqueueMedia bool) *JoinVoiceAndPlayContext {
+func JoinMockVoiceChannelAndPlayEx(
+	ctrl *gomock.Controller,
+	currentMediaDone chan error,
+	enqueueMedia bool,
+	streamingSession *MockDcaStreamingSession,
+) *JoinVoiceAndPlayContext {
 	mockDca := NewMockDiscordAudio(ctrl)
 	mockDiscordSession := NewMockDiscordSession(ctrl)
 	mockVoiceConnection := NewMockDiscordVoiceConnection(ctrl)
@@ -43,8 +61,8 @@ func JoinMockVoiceChannelAndPlay(ctrl *gomock.Controller, currentMediaDone chan 
 		mockVoiceConnection.EXPECT().Speaking(true),
 	)
 
-	mockDca.EXPECT().EncodeFile(mockMedia.FileURL(), gomock.Any()).Return(nil, nil).MinTimes(1)
-	mockDca.EXPECT().NewStream(nil, mockVoiceConnection, gomock.Any()).Return(nil).MinTimes(1).
+	mockDca.EXPECT().EncodeFile(mockMedia.FileURL(), gomock.Any()).Return(nil, nil).Times(1)
+	mockDca.EXPECT().NewStream(nil, mockVoiceConnection, gomock.Any()).Return(streamingSession).MinTimes(1).
 		Do(func(encoding interface{}, voiceConn interface{}, d chan error) {
 			if currentMediaDone != nil {
 				go func() {
@@ -75,6 +93,7 @@ func JoinMockVoiceChannelAndPlay(ctrl *gomock.Controller, currentMediaDone chan 
 	return &JoinVoiceAndPlayContext{
 		mockVoiceConnection: mockVoiceConnection,
 		mockDiscordSession:  mockDiscordSession,
+		mockDca:             mockDca,
 		dms:                 dms,
 		mockMedia:           mockMedia,
 		guildID:             gID,
@@ -82,12 +101,20 @@ func JoinMockVoiceChannelAndPlay(ctrl *gomock.Controller, currentMediaDone chan 
 	}
 }
 
+func JoinMockVoiceChannelAndPlay(
+	ctrl *gomock.Controller,
+	currentMediaDone chan error,
+) *JoinVoiceAndPlayContext {
+	mockDcaStreamingSession := NewMockDcaStreamingSession(ctrl)
+	return JoinMockVoiceChannelAndPlayEx(ctrl, currentMediaDone, true, mockDcaStreamingSession)
+}
+
 var _ = Describe("Playing music on a voice channel", func() {
 	It("Creates a music session and starts playing media after enqueueing it", func() {
 		ctrl := gomock.NewController(GinkgoT())
 
 		currentMediaDone := make(chan error)
-		playerContext := JoinMockVoiceChannelAndPlay(ctrl, currentMediaDone, true)
+		playerContext := JoinMockVoiceChannelAndPlay(ctrl, currentMediaDone)
 
 		c := make(chan struct{})
 
@@ -121,7 +148,7 @@ var _ = Describe("Playing music on a voice channel", func() {
 			ctrl := gomock.NewController(GinkgoT())
 
 			currentMediaDone := make(chan error)
-			playerContext := JoinMockVoiceChannelAndPlay(ctrl, currentMediaDone, true)
+			playerContext := JoinMockVoiceChannelAndPlay(ctrl, currentMediaDone)
 			// Leave() will call Speaking(false) if leaving during playing
 			playerContext.mockVoiceConnection.EXPECT().Speaking(false).MaxTimes(1)
 
@@ -155,7 +182,7 @@ var _ = Describe("Playing music on a voice channel", func() {
 			ctrl := gomock.NewController(GinkgoT())
 
 			currentMediaDone := make(chan error)
-			playerContext := JoinMockVoiceChannelAndPlay(ctrl, currentMediaDone, false)
+			playerContext := JoinMockVoiceChannelAndPlayEx(ctrl, currentMediaDone, false, nil)
 			playerContext.mockVoiceConnection.EXPECT().Speaking(false).MaxTimes(2)
 
 			c := make(chan struct{})
@@ -195,7 +222,7 @@ var _ = Describe("Playing music on a voice channel", func() {
 			ctrl := gomock.NewController(GinkgoT())
 
 			currentMediaDone := make(chan error)
-			playerContext := JoinMockVoiceChannelAndPlay(ctrl, currentMediaDone, true)
+			playerContext := JoinMockVoiceChannelAndPlay(ctrl, currentMediaDone)
 			Expect(playerContext.dms.EnqueueMedia(playerContext.mockMedia)).NotTo(HaveOccurred()) // Enqueue a second media
 
 			c := make(chan struct{})
@@ -205,6 +232,7 @@ var _ = Describe("Playing music on a voice channel", func() {
 
 			playerContext.mockVoiceConnection.EXPECT().IsReady().Return(true).AnyTimes()
 			playerContext.mockVoiceConnection.EXPECT().Speaking(true).MaxTimes(2)
+			playerContext.mockDca.EXPECT().EncodeFile(playerContext.mockMedia.FileURL(), gomock.Any()).Return(nil, nil).MaxTimes(2)
 			playerContext.mockVoiceConnection.EXPECT().Speaking(false).Do(func(b bool) {
 				wg.Done()
 			}).MaxTimes(2)
@@ -261,7 +289,7 @@ var _ = Describe("Playing music on a voice channel", func() {
 			ctrl := gomock.NewController(GinkgoT())
 
 			currentMediaDone := make(chan error)
-			playerContext := JoinMockVoiceChannelAndPlay(ctrl, currentMediaDone, true)
+			playerContext := JoinMockVoiceChannelAndPlay(ctrl, currentMediaDone)
 			Expect(playerContext.dms.EnqueueMedia(playerContext.mockMedia)).NotTo(HaveOccurred())
 			Expect(playerContext.dms.EnqueueMedia(playerContext.mockMedia)).NotTo(HaveOccurred())
 
@@ -305,7 +333,7 @@ var _ = Describe("Playing music on a voice channel", func() {
 		It("Gives an error when enqueueing past max queue size", func() {
 			ctrl := gomock.NewController(GinkgoT())
 
-			playerContext := JoinMockVoiceChannelAndPlay(ctrl, nil, false)
+			playerContext := JoinMockVoiceChannelAndPlayEx(ctrl, nil, false, nil)
 
 			// Enqueue 10 media
 			for index := 0; index < 10; index += 1 {
@@ -363,12 +391,12 @@ var _ = Describe("Playing music on a voice channel", func() {
 		})
 	})
 
-	When("Network connection to discord voice drops", func() {
+	When("Discord voice connection has a network error", func() {
 		It("Reconnects to the voice if connection drops between playing sessions", func() {
 			ctrl := gomock.NewController(GinkgoT())
 
 			currentMediaDone := make(chan error)
-			playerContext := JoinMockVoiceChannelAndPlay(ctrl, currentMediaDone, true)
+			playerContext := JoinMockVoiceChannelAndPlay(ctrl, currentMediaDone)
 
 			c := make(chan struct{})
 
@@ -382,6 +410,7 @@ var _ = Describe("Playing music on a voice channel", func() {
 					ChannelVoiceJoin(playerContext.guildID, playerContext.channelID, false, false).
 					Return(playerContext.mockVoiceConnection, nil),
 				playerContext.mockVoiceConnection.EXPECT().Speaking(true),
+				playerContext.mockDca.EXPECT().EncodeFile(playerContext.mockMedia.FileURL(), gomock.Any()).Times(1),
 				playerContext.mockVoiceConnection.EXPECT().Speaking(false),
 				playerContext.mockVoiceConnection.EXPECT().Disconnect().Do(func() {
 					wg.Done()
@@ -395,6 +424,111 @@ var _ = Describe("Playing music on a voice channel", func() {
 
 			// Done second media
 			currentMediaDone <- nil
+
+			Expect(playerContext.dms.Leave()).To(BeTrue())
+
+			go func() {
+				wg.Wait()
+				close(c)
+				close(currentMediaDone)
+			}()
+
+			select {
+			case <-c:
+				return
+			case <-time.After(20 * time.Second):
+				Fail("Voice worker timed out")
+			}
+		})
+
+		DescribeTable("Reconnects to the voice & resumes if discord connection drops while playing", func(
+			disableReloadFromTS bool,
+		) {
+			ctrl := gomock.NewController(GinkgoT())
+
+			mockDcaStreamingSession := NewMockDcaStreamingSession(ctrl)
+
+			currentMediaDone := make(chan error)
+			playerContext := JoinMockVoiceChannelAndPlayEx(ctrl, currentMediaDone, true, mockDcaStreamingSession)
+
+			playerContext.mockMedia.DisableReloadFromTS = disableReloadFromTS
+
+			c := make(chan struct{})
+
+			var wg sync.WaitGroup
+			wg.Add(1)
+
+			encoderCalledWithStartTime := 0
+
+			gomock.InOrder(
+				playerContext.mockVoiceConnection.EXPECT().Speaking(false),
+				mockDcaStreamingSession.EXPECT().PlaybackPosition().Return(10*time.Second).MinTimes(1),
+				playerContext.mockVoiceConnection.EXPECT().IsReady().Return(false),
+				playerContext.mockDiscordSession.EXPECT().
+					ChannelVoiceJoin(playerContext.guildID, playerContext.channelID, false, false).
+					Return(playerContext.mockVoiceConnection, nil),
+				playerContext.mockVoiceConnection.EXPECT().Speaking(true),
+				playerContext.mockDca.EXPECT().EncodeFile(playerContext.mockMedia.FileURL(), gomock.Any()).
+					Return(nil, nil).
+					Do(func(path string, encodeOptions *dca.EncodeOptions) {
+						encoderCalledWithStartTime = encodeOptions.StartTime
+					}),
+				playerContext.mockVoiceConnection.EXPECT().Speaking(false),
+				playerContext.mockVoiceConnection.EXPECT().Disconnect().Do(func() {
+					wg.Done()
+				}),
+			)
+
+			// Error on first media
+			currentMediaDone <- errors.New("Voice connection closed")
+
+			// Done to first media after reload
+			currentMediaDone <- nil
+
+			Expect(playerContext.dms.Leave()).To(BeTrue())
+
+			go func() {
+				wg.Wait()
+				close(c)
+				close(currentMediaDone)
+			}()
+
+			select {
+			case <-c:
+				if playerContext.mockMedia.DisableReloadFromTS {
+					Expect(encoderCalledWithStartTime).To(Equal(0))
+				} else {
+					Expect(encoderCalledWithStartTime).To(BeNumerically("~", 10, 1))
+				}
+				return
+			case <-time.After(20 * time.Second):
+				Fail("Voice worker timed out")
+			}
+		},
+			Entry("Media can be resumed from current playback timestamp", false),
+			Entry("Media does not support resuming from current playback timestamp", true),
+		)
+
+		It("Does not reconnect if a different error is encountered", func() {
+			ctrl := gomock.NewController(GinkgoT())
+
+			currentMediaDone := make(chan error)
+			playerContext := JoinMockVoiceChannelAndPlay(ctrl, currentMediaDone)
+
+			c := make(chan struct{})
+
+			var wg sync.WaitGroup
+			wg.Add(1)
+
+			gomock.InOrder(
+				playerContext.mockVoiceConnection.EXPECT().Speaking(false),
+				playerContext.mockVoiceConnection.EXPECT().Disconnect().Do(func() {
+					wg.Done()
+				}),
+			)
+
+			// Error on first media
+			currentMediaDone <- errors.New("ffmpeg exited with status code 1")
 
 			Expect(playerContext.dms.Leave()).To(BeTrue())
 

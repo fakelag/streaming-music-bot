@@ -3,30 +3,31 @@ package discordplayer
 import (
 	"fmt"
 	"io"
+	discordinterface "musicbot/discordplayer/interfaces"
 	"musicbot/entities"
+	"strings"
 	"time"
 
 	"github.com/fakelag/dca"
+	// . "github.com/onsi/ginkgo/v2"
 )
 
 type DcaMediaSession struct {
 	encodingSession  *dca.EncodeSession
-	streamingSession *dca.StreamingSession
+	streamingSession discordinterface.DcaStreamingSession
 	done             chan error
 }
 
 func (dms *DiscordMusicSession) voiceWorker() {
-	defer dms.disconnectAndExitWorker()
-
 workerloop:
 	for {
 		mediaFile := dms.consumeNextMediaFile()
 
 		if mediaFile != nil {
-			err, keepPlaying := dms.playMediaFile(mediaFile)
+			err, keepPlaying := dms.playMediaFile(mediaFile, time.Duration(0))
 
 			if err != nil {
-				panic(err)
+				fmt.Printf("Error occurred while playing: %s\n", err.Error())
 			}
 
 			if !keepPlaying {
@@ -43,9 +44,14 @@ workerloop:
 
 		time.Sleep(50 * time.Millisecond)
 	}
+
+	dms.disconnectAndExitWorker()
 }
 
-func (dms *DiscordMusicSession) playMediaFile(mediaFile entities.Media) (err error, keepPlaying bool) {
+func (dms *DiscordMusicSession) playMediaFile(
+	mediaFile entities.Media,
+	startPlaybackAt time.Duration,
+) (err error, keepPlaying bool) {
 	err = dms.checkDiscordVoiceConnection()
 
 	if err != nil {
@@ -56,7 +62,7 @@ func (dms *DiscordMusicSession) playMediaFile(mediaFile entities.Media) (err err
 
 	_ = dms.voiceConnection.Speaking(true)
 
-	session, err := dms.playUrlInDiscord(mediaFile.FileURL(), time.Duration(0))
+	session, err := dms.playUrlInDiscord(mediaFile.FileURL(), startPlaybackAt)
 
 	if err != nil {
 		return err, true
@@ -75,11 +81,33 @@ func (dms *DiscordMusicSession) playMediaFile(mediaFile entities.Media) (err err
 
 		_ = dms.voiceConnection.Speaking(false)
 
-		if err != nil && err != io.EOF {
+		if err == nil || err == io.EOF {
+			return nil, true
+		}
+
+		if !strings.Contains(err.Error(), "Voice connection closed") {
 			return err, true
 		}
 
-		return nil, true
+		mediaFileDuration := mediaFile.Duration()
+
+		if mediaFileDuration != nil {
+			mediaDurationLeft := *mediaFile.Duration() - session.streamingSession.PlaybackPosition()
+
+			if mediaDurationLeft.Seconds() < 2 {
+				// No more content to play, done
+				return err, true
+			}
+		}
+
+		reloadPlaybackStartAt := time.Duration(0)
+
+		if mediaFile.CanReloadFromTimeStamp() {
+			reloadPlaybackStartAt = session.streamingSession.PlaybackPosition()
+		}
+
+		// Retry after voice connection drop
+		return dms.playMediaFile(mediaFile, reloadPlaybackStartAt)
 	case <-dms.chanLeaveCommand:
 		fmt.Printf("Bot asked to leave while playing\n")
 

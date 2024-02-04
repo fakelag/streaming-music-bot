@@ -123,9 +123,11 @@ func (yt *Youtube) GetYoutubeMedia(videoIdOrSearchTerm string) (*YoutubeMedia, e
 		}
 
 		media := &YoutubeMedia{
-			ID:        ytDlpVideo.ID,
-			Title:     ytDlpVideo.Title,
-			StreamURL: videoStreamURL,
+			ID:            ytDlpVideo.ID,
+			Title:         ytDlpVideo.Title,
+			IsLiveStream:  ytDlpVideo.IsLiveStream,
+			StreamURL:     videoStreamURL,
+			VideoDuration: time.Duration(ytDlpVideo.Duration) * time.Second,
 		}
 
 		streamExpireUnixSecondsMatch := yt.streamUrlExpireRegex.FindStringSubmatch(videoStreamURL)
