@@ -20,11 +20,16 @@ func (mm *MockMedia) FileURL() string {
 	return "mockurl"
 }
 
-func JoinMockVoiceChannelAndPlay(ctrl *gomock.Controller, currentMediaDone chan error, enqueueMedia bool) (
-	*MockDiscordVoiceConnection,
-	*discordplayer.DiscordMusicSession,
-	*MockMedia,
-) {
+type JoinVoiceAndPlayContext struct {
+	mockVoiceConnection *MockDiscordVoiceConnection
+	mockDiscordSession  *MockDiscordSession
+	dms                 *discordplayer.DiscordMusicSession
+	mockMedia           *MockMedia
+	guildID             string
+	channelID           string
+}
+
+func JoinMockVoiceChannelAndPlay(ctrl *gomock.Controller, currentMediaDone chan error, enqueueMedia bool) *JoinVoiceAndPlayContext {
 	mockDca := NewMockDiscordAudio(ctrl)
 	mockDiscordSession := NewMockDiscordSession(ctrl)
 	mockVoiceConnection := NewMockDiscordVoiceConnection(ctrl)
@@ -35,7 +40,6 @@ func JoinMockVoiceChannelAndPlay(ctrl *gomock.Controller, currentMediaDone chan 
 
 	gomock.InOrder(
 		mockDiscordSession.EXPECT().ChannelVoiceJoin(gID, cID, false, false).Return(mockVoiceConnection, nil),
-		mockVoiceConnection.EXPECT().IsReady().Return(true),
 		mockVoiceConnection.EXPECT().Speaking(true),
 	)
 
@@ -68,7 +72,14 @@ func JoinMockVoiceChannelAndPlay(ctrl *gomock.Controller, currentMediaDone chan 
 		Expect(dms.EnqueueMedia(mockMedia)).NotTo(HaveOccurred())
 	}
 
-	return mockVoiceConnection, dms, mockMedia
+	return &JoinVoiceAndPlayContext{
+		mockVoiceConnection: mockVoiceConnection,
+		mockDiscordSession:  mockDiscordSession,
+		dms:                 dms,
+		mockMedia:           mockMedia,
+		guildID:             gID,
+		channelID:           cID,
+	}
 }
 
 var _ = Describe("Playing music on a voice channel", func() {
@@ -76,7 +87,7 @@ var _ = Describe("Playing music on a voice channel", func() {
 		ctrl := gomock.NewController(GinkgoT())
 
 		currentMediaDone := make(chan error)
-		mockVoiceConnection, _, _ := JoinMockVoiceChannelAndPlay(ctrl, currentMediaDone, true)
+		playerContext := JoinMockVoiceChannelAndPlay(ctrl, currentMediaDone, true)
 
 		c := make(chan struct{})
 
@@ -93,7 +104,7 @@ var _ = Describe("Playing music on a voice channel", func() {
 			close(c)
 		}()
 
-		mockVoiceConnection.EXPECT().Speaking(false).Do(func(b bool) {
+		playerContext.mockVoiceConnection.EXPECT().Speaking(false).Do(func(b bool) {
 			wg.Done()
 		})
 
@@ -110,7 +121,9 @@ var _ = Describe("Playing music on a voice channel", func() {
 			ctrl := gomock.NewController(GinkgoT())
 
 			currentMediaDone := make(chan error)
-			mockVoiceConnection, dms, _ := JoinMockVoiceChannelAndPlay(ctrl, currentMediaDone, true)
+			playerContext := JoinMockVoiceChannelAndPlay(ctrl, currentMediaDone, true)
+			// Leave() will call Speaking(false) if leaving during playing
+			playerContext.mockVoiceConnection.EXPECT().Speaking(false).MaxTimes(1)
 
 			c := make(chan struct{})
 
@@ -119,13 +132,13 @@ var _ = Describe("Playing music on a voice channel", func() {
 
 			go func() {
 				time.Sleep(1 * time.Second)
-				Expect(dms.Leave()).To(BeTrue())
+				Expect(playerContext.dms.Leave()).To(BeTrue())
 
 				wg.Wait()
 				close(c)
 			}()
 
-			mockVoiceConnection.EXPECT().Disconnect().Do(func() {
+			playerContext.mockVoiceConnection.EXPECT().Disconnect().Do(func() {
 				close(currentMediaDone)
 				wg.Done()
 			})
@@ -142,33 +155,34 @@ var _ = Describe("Playing music on a voice channel", func() {
 			ctrl := gomock.NewController(GinkgoT())
 
 			currentMediaDone := make(chan error)
-			mockVoiceConnection, dms, mockMedia := JoinMockVoiceChannelAndPlay(ctrl, currentMediaDone, false)
+			playerContext := JoinMockVoiceChannelAndPlay(ctrl, currentMediaDone, false)
+			playerContext.mockVoiceConnection.EXPECT().Speaking(false).MaxTimes(2)
 
 			c := make(chan struct{})
 
 			var wg sync.WaitGroup
 			wg.Add(1)
 
-			Expect(dms.Leave()).To(BeFalse())
+			Expect(playerContext.dms.Leave()).To(BeFalse())
 
-			dms.EnqueueMedia(mockMedia)
+			playerContext.dms.EnqueueMedia(playerContext.mockMedia)
 
 			go func() {
 				time.Sleep(1 * time.Second)
-				Expect(dms.Leave()).To(BeTrue())
+				Expect(playerContext.dms.Leave()).To(BeTrue())
 
 				wg.Wait()
 				close(c)
 			}()
 
-			mockVoiceConnection.EXPECT().Disconnect().Do(func() {
+			playerContext.mockVoiceConnection.EXPECT().Disconnect().Do(func() {
 				close(currentMediaDone)
 				wg.Done()
 			})
 
 			select {
 			case <-c:
-				Expect(dms.Leave()).To(BeFalse())
+				Expect(playerContext.dms.Leave()).To(BeFalse())
 				return
 			case <-time.After(20 * time.Second):
 				Fail("Voice worker timed out")
@@ -181,29 +195,29 @@ var _ = Describe("Playing music on a voice channel", func() {
 			ctrl := gomock.NewController(GinkgoT())
 
 			currentMediaDone := make(chan error)
-			mockVoiceConnection, dms, mockMedia := JoinMockVoiceChannelAndPlay(ctrl, currentMediaDone, true)
-			Expect(dms.EnqueueMedia(mockMedia)).NotTo(HaveOccurred()) // Enqueue a second media
+			playerContext := JoinMockVoiceChannelAndPlay(ctrl, currentMediaDone, true)
+			Expect(playerContext.dms.EnqueueMedia(playerContext.mockMedia)).NotTo(HaveOccurred()) // Enqueue a second media
 
 			c := make(chan struct{})
 
 			var wg sync.WaitGroup
 			wg.Add(2)
 
-			mockVoiceConnection.EXPECT().IsReady().Return(true).AnyTimes()
-			mockVoiceConnection.EXPECT().Speaking(true).MaxTimes(2)
-			mockVoiceConnection.EXPECT().Speaking(false).Do(func(b bool) {
+			playerContext.mockVoiceConnection.EXPECT().IsReady().Return(true).AnyTimes()
+			playerContext.mockVoiceConnection.EXPECT().Speaking(true).MaxTimes(2)
+			playerContext.mockVoiceConnection.EXPECT().Speaking(false).Do(func(b bool) {
 				wg.Done()
 			}).MaxTimes(2)
 
 			Eventually(func() int {
-				return len(dms.GetMediaQueue())
+				return len(playerContext.dms.GetMediaQueue())
 			}).
 				WithTimeout(5 * time.Second).
 				WithPolling(50 * time.Millisecond).
 				Should(Equal(1))
 
 			Eventually(func() entities.Media {
-				return dms.GetCurrentlyPlayingMedia()
+				return playerContext.dms.GetCurrentlyPlayingMedia()
 			}).
 				WithTimeout(2 * time.Second).
 				WithPolling(50 * time.Millisecond).
@@ -213,7 +227,7 @@ var _ = Describe("Playing music on a voice channel", func() {
 			currentMediaDone <- nil
 
 			Eventually(func() int {
-				return len(dms.GetMediaQueue())
+				return len(playerContext.dms.GetMediaQueue())
 			}).
 				WithTimeout(5 * time.Second).
 				WithPolling(50 * time.Millisecond).
@@ -232,7 +246,7 @@ var _ = Describe("Playing music on a voice channel", func() {
 			case <-c:
 				// Current media should be nil after playing is done
 				Eventually(func() entities.Media {
-					return dms.GetCurrentlyPlayingMedia()
+					return playerContext.dms.GetCurrentlyPlayingMedia()
 				}).
 					WithTimeout(2 * time.Second).
 					WithPolling(50 * time.Millisecond).
@@ -247,33 +261,33 @@ var _ = Describe("Playing music on a voice channel", func() {
 			ctrl := gomock.NewController(GinkgoT())
 
 			currentMediaDone := make(chan error)
-			mockVoiceConnection, dms, mockMedia := JoinMockVoiceChannelAndPlay(ctrl, currentMediaDone, true)
-			Expect(dms.EnqueueMedia(mockMedia)).NotTo(HaveOccurred())
-			Expect(dms.EnqueueMedia(mockMedia)).NotTo(HaveOccurred())
+			playerContext := JoinMockVoiceChannelAndPlay(ctrl, currentMediaDone, true)
+			Expect(playerContext.dms.EnqueueMedia(playerContext.mockMedia)).NotTo(HaveOccurred())
+			Expect(playerContext.dms.EnqueueMedia(playerContext.mockMedia)).NotTo(HaveOccurred())
 
 			c := make(chan struct{})
 
 			var wg sync.WaitGroup
 			wg.Add(1)
 
-			mockVoiceConnection.EXPECT().IsReady().Return(true).AnyTimes()
-			mockVoiceConnection.EXPECT().Speaking(gomock.Any()).MaxTimes(2)
-			mockVoiceConnection.EXPECT().Disconnect().Do(func() {
+			playerContext.mockVoiceConnection.EXPECT().IsReady().Return(true).AnyTimes()
+			playerContext.mockVoiceConnection.EXPECT().Speaking(gomock.Any()).MaxTimes(2)
+			playerContext.mockVoiceConnection.EXPECT().Disconnect().Do(func() {
 				wg.Done()
 			})
 
 			Eventually(func() int {
-				return len(dms.GetMediaQueue())
+				return len(playerContext.dms.GetMediaQueue())
 			}).
 				WithTimeout(5 * time.Second).
 				WithPolling(50 * time.Millisecond).
 				Should(Equal(2))
 
-			Expect(dms.ClearMediaQueue()).To(BeTrue())
-			Expect(dms.GetMediaQueue()).To(HaveLen(0))
-			Expect(dms.ClearMediaQueue()).To(BeFalse())
+			Expect(playerContext.dms.ClearMediaQueue()).To(BeTrue())
+			Expect(playerContext.dms.GetMediaQueue()).To(HaveLen(0))
+			Expect(playerContext.dms.ClearMediaQueue()).To(BeFalse())
 
-			Expect(dms.Leave()).To(BeTrue())
+			Expect(playerContext.dms.Leave()).To(BeTrue())
 
 			go func() {
 				wg.Wait()
@@ -291,35 +305,35 @@ var _ = Describe("Playing music on a voice channel", func() {
 		It("Gives an error when enqueueing past max queue size", func() {
 			ctrl := gomock.NewController(GinkgoT())
 
-			mockVoiceConnection, dms, mockMedia := JoinMockVoiceChannelAndPlay(ctrl, nil, false)
+			playerContext := JoinMockVoiceChannelAndPlay(ctrl, nil, false)
 
 			// Enqueue 10 media
 			for index := 0; index < 10; index += 1 {
-				Expect(dms.EnqueueMedia(mockMedia)).NotTo(HaveOccurred())
+				Expect(playerContext.dms.EnqueueMedia(playerContext.mockMedia)).NotTo(HaveOccurred())
 			}
 
 			Eventually(func() int {
-				return len(dms.GetMediaQueue())
+				return len(playerContext.dms.GetMediaQueue())
 			}).
 				WithTimeout(5 * time.Second).
 				WithPolling(50 * time.Millisecond).
 				Should(Equal(9))
 
-			Expect(dms.EnqueueMedia(mockMedia)).NotTo(HaveOccurred())
-			Expect(dms.EnqueueMedia(mockMedia)).To(MatchError("queue full"))
+			Expect(playerContext.dms.EnqueueMedia(playerContext.mockMedia)).NotTo(HaveOccurred())
+			Expect(playerContext.dms.EnqueueMedia(playerContext.mockMedia)).To(MatchError("queue full"))
 
 			c := make(chan struct{})
 
 			var wg sync.WaitGroup
 			wg.Add(1)
 
-			mockVoiceConnection.EXPECT().IsReady().Return(true).AnyTimes()
-			mockVoiceConnection.EXPECT().Speaking(gomock.Any()).AnyTimes()
-			mockVoiceConnection.EXPECT().Disconnect().Do(func() {
+			playerContext.mockVoiceConnection.EXPECT().IsReady().Return(true).AnyTimes()
+			playerContext.mockVoiceConnection.EXPECT().Speaking(gomock.Any()).AnyTimes()
+			playerContext.mockVoiceConnection.EXPECT().Disconnect().Do(func() {
 				wg.Done()
 			})
 
-			Expect(dms.Leave()).To(BeTrue())
+			Expect(playerContext.dms.Leave()).To(BeTrue())
 
 			go func() {
 				wg.Wait()
@@ -330,18 +344,68 @@ var _ = Describe("Playing music on a voice channel", func() {
 			case <-c:
 				// Expect media queue to be empty after Leave()
 				Eventually(func() int {
-					return len(dms.GetMediaQueue())
+					return len(playerContext.dms.GetMediaQueue())
 				}).
 					WithTimeout(2 * time.Second).
 					WithPolling(50 * time.Millisecond).
 					Should(Equal(0))
 				// Expect current media to be nil after Leave()
 				Eventually(func() entities.Media {
-					return dms.GetCurrentlyPlayingMedia()
+					return playerContext.dms.GetCurrentlyPlayingMedia()
 				}).
 					WithTimeout(2 * time.Second).
 					WithPolling(50 * time.Millisecond).
 					Should(BeNil())
+				return
+			case <-time.After(20 * time.Second):
+				Fail("Voice worker timed out")
+			}
+		})
+	})
+
+	When("Network connection to discord voice drops", func() {
+		It("Reconnects to the voice if connection drops between playing sessions", func() {
+			ctrl := gomock.NewController(GinkgoT())
+
+			currentMediaDone := make(chan error)
+			playerContext := JoinMockVoiceChannelAndPlay(ctrl, currentMediaDone, true)
+
+			c := make(chan struct{})
+
+			var wg sync.WaitGroup
+			wg.Add(1)
+
+			gomock.InOrder(
+				playerContext.mockVoiceConnection.EXPECT().Speaking(false),
+				playerContext.mockVoiceConnection.EXPECT().IsReady().Return(false),
+				playerContext.mockDiscordSession.EXPECT().
+					ChannelVoiceJoin(playerContext.guildID, playerContext.channelID, false, false).
+					Return(playerContext.mockVoiceConnection, nil),
+				playerContext.mockVoiceConnection.EXPECT().Speaking(true),
+				playerContext.mockVoiceConnection.EXPECT().Speaking(false),
+				playerContext.mockVoiceConnection.EXPECT().Disconnect().Do(func() {
+					wg.Done()
+				}),
+			)
+
+			// Done first media
+			currentMediaDone <- nil
+
+			playerContext.dms.EnqueueMedia(playerContext.mockMedia)
+
+			// Done second media
+			currentMediaDone <- nil
+
+			Expect(playerContext.dms.Leave()).To(BeTrue())
+
+			go func() {
+				wg.Wait()
+				close(c)
+				close(currentMediaDone)
+			}()
+
+			select {
+			case <-c:
 				return
 			case <-time.After(20 * time.Second):
 				Fail("Voice worker timed out")
