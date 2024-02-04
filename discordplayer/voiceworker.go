@@ -67,6 +67,9 @@ func (dms *DiscordMusicSession) playMediaFile(mediaFile entities.Media) (err err
 		return err, true
 	}
 
+	dms.setCurrentlyPlayingMedia(mediaFile)
+	defer dms.setCurrentlyPlayingMedia(nil) // TODO: Think about this again when implementing reloads
+
 	select {
 	case err := <-session.done:
 		fmt.Printf("done: %+v\n", err)
@@ -139,6 +142,7 @@ func (dms *DiscordMusicSession) disconnectAndExitWorker() {
 	defer dms.mutex.Unlock()
 
 	dms.workerActive = false
+	dms.currentlyPlayingMedia = nil
 	dms.mediaQueue = make([]entities.Media, 0)
 	dms.voiceConnection.Disconnect()
 
@@ -149,4 +153,10 @@ func (dms *DiscordMusicSession) isWorkerActive() bool {
 	dms.mutex.RLock()
 	defer dms.mutex.RUnlock()
 	return dms.workerActive
+}
+
+func (dms *DiscordMusicSession) setCurrentlyPlayingMedia(media entities.Media) {
+	dms.mutex.Lock()
+	defer dms.mutex.Unlock()
+	dms.currentlyPlayingMedia = media
 }

@@ -22,8 +22,9 @@ type DiscordMusicSession struct {
 	dca             DiscordAudio
 	voiceConnection DiscordVoiceConnection
 
-	mediaQueue        []entities.Media
-	mediaQueueMaxSize int
+	currentlyPlayingMedia entities.Media
+	mediaQueue            []entities.Media
+	mediaQueueMaxSize     int
 
 	workerActive     bool
 	chanLeaveCommand chan bool
@@ -120,4 +121,10 @@ func (dms *DiscordMusicSession) GetMediaQueue() []entities.Media {
 	copy(mediaQueueCopy, dms.mediaQueue)
 
 	return mediaQueueCopy
+}
+
+func (dms *DiscordMusicSession) GetCurrentlyPlayingMedia() entities.Media {
+	dms.mutex.RLock()
+	defer dms.mutex.RUnlock()
+	return dms.currentlyPlayingMedia
 }
