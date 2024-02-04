@@ -48,7 +48,11 @@ func JoinMockVoiceChannelAndPlay(ctrl *gomock.Controller, done chan error, enque
 			}),
 	)
 
-	dms, err := discordplayer.NewDiscordMusicSessionEx(mockDca, mockDiscordSession, gID, cID)
+	dms, err := discordplayer.NewDiscordMusicSessionEx(mockDca, mockDiscordSession, &discordplayer.DiscordMusicSessionOptions{
+		GuildID:           gID,
+		VoiceChannelID:    cID,
+		MediaQueueMaxSize: 10,
+	})
 
 	if err != nil {
 		panic(err)

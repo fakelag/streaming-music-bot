@@ -17,41 +17,52 @@ type DiscordMusicSession struct {
 	voiceChannelID string
 	discordSession DiscordSession
 
-	dca DiscordAudio
-
-	mediaQueue      []entities.Media
+	// Worker fields, unlocked access in worker goroutine
+	dca             DiscordAudio
 	voiceConnection DiscordVoiceConnection
+
+	mediaQueue       []entities.Media
+	mediaQueueLength int
 
 	workerActive     bool
 	chanLeaveCommand chan bool
 }
 
+type DiscordMusicSessionOptions struct {
+	GuildID           string
+	VoiceChannelID    string
+	MediaQueueMaxSize int // Default 100
+}
+
 func NewDiscordMusicSession(
 	discord *discordgo.Session,
-	guildId string,
-	voiceChannelID string,
+	options *DiscordMusicSessionOptions,
 ) (*DiscordMusicSession, error) {
 	return NewDiscordMusicSessionEx(
 		NewDiscordAudio(),
 		NewDiscordSession(discord),
-		guildId,
-		voiceChannelID,
+		options,
 	)
 }
 
 func NewDiscordMusicSessionEx(
 	dca DiscordAudio,
 	discord DiscordSession,
-	guildID string,
-	voiceChannelID string,
+	options *DiscordMusicSessionOptions,
 ) (*DiscordMusicSession, error) {
+	queueMaxSize := options.MediaQueueMaxSize
+
+	if queueMaxSize == 0 {
+		queueMaxSize = 100
+	}
+
 	dms := &DiscordMusicSession{
-		guildID:          guildID,
-		voiceChannelID:   voiceChannelID,
+		guildID:          options.GuildID,
+		voiceChannelID:   options.VoiceChannelID,
 		voiceConnection:  nil,
 		discordSession:   discord,
 		dca:              dca,
-		mediaQueue:       make([]entities.Media, 0),
+		mediaQueue:       make([]entities.Media, options.MediaQueueMaxSize),
 		chanLeaveCommand: make(chan bool, 1),
 	}
 
