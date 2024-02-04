@@ -12,13 +12,17 @@ import (
 type DiscordMusicSession struct {
 	mutex sync.RWMutex
 
-	voiceChannelID  string
-	voiceConnection DiscordVoiceConnection
+	// Static fields, unlocked access
+	guildID        string
+	voiceChannelID string
+	discordSession DiscordSession
 
 	dca DiscordAudio
 
-	mediaQueue []entities.Media
+	mediaQueue      []entities.Media
+	voiceConnection DiscordVoiceConnection
 
+	workerActive     bool
 	chanLeaveCommand chan bool
 }
 
@@ -38,24 +42,18 @@ func NewDiscordMusicSession(
 func NewDiscordMusicSessionEx(
 	dca DiscordAudio,
 	discord DiscordSession,
-	guildId string,
+	guildID string,
 	voiceChannelID string,
 ) (*DiscordMusicSession, error) {
-	voiceConnection, err := discord.ChannelVoiceJoin(guildId, voiceChannelID, false, false)
-
-	if err != nil {
-		return nil, err
-	}
-
 	dms := &DiscordMusicSession{
+		guildID:          guildID,
 		voiceChannelID:   voiceChannelID,
-		voiceConnection:  voiceConnection,
+		voiceConnection:  nil,
+		discordSession:   discord,
 		dca:              dca,
 		mediaQueue:       make([]entities.Media, 0),
 		chanLeaveCommand: make(chan bool, 1),
 	}
-
-	go dms.voiceWorker()
 
 	return dms, nil
 }
@@ -65,6 +63,10 @@ func (dms *DiscordMusicSession) EnqueueMedia(media entities.Media) {
 	defer dms.mutex.Unlock()
 
 	dms.mediaQueue = append(dms.mediaQueue, media)
+
+	if !dms.workerActive {
+		go dms.voiceWorker()
+	}
 }
 
 func (dms *DiscordMusicSession) StartPlaylist(playlist entities.Playlist) {
@@ -79,11 +81,13 @@ func (dms *DiscordMusicSession) Repeat() {
 func (dms *DiscordMusicSession) Skip() {
 }
 
-func (dms *DiscordMusicSession) Leave() {
+func (dms *DiscordMusicSession) Leave() bool {
 	dms.mutex.Lock()
 	defer dms.mutex.Unlock()
 
-	if len(dms.chanLeaveCommand) == 0 {
+	if dms.workerActive && len(dms.chanLeaveCommand) == 0 {
 		dms.chanLeaveCommand <- true
+		return true
 	}
+	return false
 }

@@ -16,6 +16,21 @@ type DcaMediaSession struct {
 }
 
 func (dms *DiscordMusicSession) voiceWorker() {
+	if dms.isWorkerActive() {
+		return
+	}
+
+	dms.setWorkerActive(true)
+	defer dms.setWorkerActive(false)
+
+	voiceConnection, err := dms.discordSession.ChannelVoiceJoin(dms.guildID, dms.voiceChannelID, false, false)
+
+	if err != nil {
+		panic(err)
+	}
+
+	dms.voiceConnection = voiceConnection
+
 workerloop:
 	for {
 		mediaFile := dms.nextMediaFile()
@@ -122,4 +137,16 @@ func (dms *DiscordMusicSession) nextMediaFile() entities.Media {
 	var nextMediaFile entities.Media
 	nextMediaFile, dms.mediaQueue = dms.mediaQueue[0], dms.mediaQueue[1:]
 	return nextMediaFile
+}
+
+func (dms *DiscordMusicSession) setWorkerActive(active bool) {
+	dms.mutex.Lock()
+	defer dms.mutex.Unlock()
+	dms.workerActive = active
+}
+
+func (dms *DiscordMusicSession) isWorkerActive() bool {
+	dms.mutex.RLock()
+	defer dms.mutex.RUnlock()
+	return dms.workerActive
 }
