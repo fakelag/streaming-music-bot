@@ -10,6 +10,7 @@ import (
 
 	"musicbot/discordplayer"
 	. "musicbot/discordplayer/mocks"
+	"musicbot/entities"
 )
 
 type MockMedia struct {
@@ -176,7 +177,7 @@ var _ = Describe("Playing music on a voice channel", func() {
 	})
 
 	When("Queueing media in the media queue", func() {
-		It("Enqueues media and consumes it from the queue", func() {
+		It("Enqueues media, consumes it and returns it from GetCurrentlyPlayingMedia", func() {
 			ctrl := gomock.NewController(GinkgoT())
 
 			currentMediaDone := make(chan error)
@@ -201,6 +202,13 @@ var _ = Describe("Playing music on a voice channel", func() {
 				WithPolling(50 * time.Millisecond).
 				Should(Equal(1))
 
+			Eventually(func() entities.Media {
+				return dms.GetCurrentlyPlayingMedia()
+			}).
+				WithTimeout(2 * time.Second).
+				WithPolling(50 * time.Millisecond).
+				Should(Not(BeNil()))
+
 			// Done first media
 			currentMediaDone <- nil
 
@@ -222,6 +230,13 @@ var _ = Describe("Playing music on a voice channel", func() {
 
 			select {
 			case <-c:
+				// Current media should be nil after playing is done
+				Eventually(func() entities.Media {
+					return dms.GetCurrentlyPlayingMedia()
+				}).
+					WithTimeout(2 * time.Second).
+					WithPolling(50 * time.Millisecond).
+					Should(BeNil())
 				return
 			case <-time.After(20 * time.Second):
 				Fail("Voice worker timed out")
@@ -275,6 +290,13 @@ var _ = Describe("Playing music on a voice channel", func() {
 					WithTimeout(2 * time.Second).
 					WithPolling(50 * time.Millisecond).
 					Should(Equal(0))
+				// Expect current media to be nil after Leave()
+				Eventually(func() entities.Media {
+					return dms.GetCurrentlyPlayingMedia()
+				}).
+					WithTimeout(2 * time.Second).
+					WithPolling(50 * time.Millisecond).
+					Should(BeNil())
 				return
 			case <-time.After(20 * time.Second):
 				Fail("Voice worker timed out")
