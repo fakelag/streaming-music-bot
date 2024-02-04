@@ -1,6 +1,7 @@
 package discordplayer
 
 import (
+	"errors"
 	"musicbot/entities"
 	"sync"
 
@@ -21,8 +22,8 @@ type DiscordMusicSession struct {
 	dca             DiscordAudio
 	voiceConnection DiscordVoiceConnection
 
-	mediaQueue       []entities.Media
-	mediaQueueLength int
+	mediaQueue        []entities.Media
+	mediaQueueMaxSize int
 
 	workerActive     bool
 	chanLeaveCommand chan bool
@@ -57,27 +58,34 @@ func NewDiscordMusicSessionEx(
 	}
 
 	dms := &DiscordMusicSession{
-		guildID:          options.GuildID,
-		voiceChannelID:   options.VoiceChannelID,
-		voiceConnection:  nil,
-		discordSession:   discord,
-		dca:              dca,
-		mediaQueue:       make([]entities.Media, options.MediaQueueMaxSize),
-		chanLeaveCommand: make(chan bool, 1),
+		guildID:           options.GuildID,
+		voiceChannelID:    options.VoiceChannelID,
+		voiceConnection:   nil,
+		discordSession:    discord,
+		dca:               dca,
+		mediaQueue:        make([]entities.Media, 0),
+		mediaQueueMaxSize: options.MediaQueueMaxSize,
+		chanLeaveCommand:  make(chan bool, 1),
 	}
 
 	return dms, nil
 }
 
-func (dms *DiscordMusicSession) EnqueueMedia(media entities.Media) {
+func (dms *DiscordMusicSession) EnqueueMedia(media entities.Media) error {
 	dms.mutex.Lock()
 	defer dms.mutex.Unlock()
+
+	if len(dms.mediaQueue) == dms.mediaQueueMaxSize {
+		return errors.New("queue full")
+	}
 
 	dms.mediaQueue = append(dms.mediaQueue, media)
 
 	if !dms.workerActive {
 		go dms.voiceWorker()
 	}
+
+	return nil
 }
 
 func (dms *DiscordMusicSession) StartPlaylist(playlist entities.Playlist) {

@@ -33,7 +33,7 @@ func (dms *DiscordMusicSession) voiceWorker() {
 
 workerloop:
 	for {
-		mediaFile := dms.nextMediaFile()
+		mediaFile := dms.consumeNextMediaFile()
 
 		if mediaFile != nil {
 			err, keepPlaying := dms.playMediaFile(mediaFile)
@@ -126,7 +126,7 @@ func (dms *DiscordMusicSession) playUrlInDiscord(url string, startPlaybackAt tim
 	}, nil
 }
 
-func (dms *DiscordMusicSession) nextMediaFile() entities.Media {
+func (dms *DiscordMusicSession) consumeNextMediaFile() entities.Media {
 	dms.mutex.Lock()
 	defer dms.mutex.Unlock()
 
@@ -135,7 +135,10 @@ func (dms *DiscordMusicSession) nextMediaFile() entities.Media {
 	}
 
 	var nextMediaFile entities.Media
+
+	// Queue is resized when consuming media
 	nextMediaFile, dms.mediaQueue = dms.mediaQueue[0], dms.mediaQueue[1:]
+
 	return nextMediaFile
 }
 
