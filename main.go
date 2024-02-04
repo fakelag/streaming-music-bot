@@ -59,12 +59,7 @@ func main() {
 		}
 	}
 
-	dms, err := discordplayer.NewDiscordMusicSession(
-		discordplayer.NewDiscordAudio(),
-		discordplayer.NewDiscordSession(discord),
-		guild.ID,
-		channelID,
-	)
+	dms, err := discordplayer.NewDiscordMusicSession(discord, guild.ID, channelID)
 
 	if err != nil {
 		panic(err)

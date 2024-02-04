@@ -1,4 +1,4 @@
-package discordplayer
+package discordinterface
 
 import (
 	"github.com/fakelag/dca"

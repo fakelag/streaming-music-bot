@@ -3,6 +3,10 @@ package discordplayer
 import (
 	"musicbot/entities"
 	"sync"
+
+	. "musicbot/discordplayer/interfaces"
+
+	"github.com/bwmarrin/discordgo"
 )
 
 type DiscordMusicSession struct {
@@ -19,6 +23,19 @@ type DiscordMusicSession struct {
 }
 
 func NewDiscordMusicSession(
+	discord *discordgo.Session,
+	guildId string,
+	voiceChannelID string,
+) (*DiscordMusicSession, error) {
+	return NewDiscordMusicSessionEx(
+		NewDiscordAudio(),
+		NewDiscordSession(discord),
+		guildId,
+		voiceChannelID,
+	)
+}
+
+func NewDiscordMusicSessionEx(
 	dca DiscordAudio,
 	discord DiscordSession,
 	guildId string,

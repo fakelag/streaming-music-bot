@@ -47,7 +47,7 @@ func JoinMockVoiceChannelAndPlay(ctrl *gomock.Controller, done chan error) (
 			}),
 	)
 
-	dms, err := discordplayer.NewDiscordMusicSession(mockDca, mockDiscordSession, gID, cID)
+	dms, err := discordplayer.NewDiscordMusicSessionEx(mockDca, mockDiscordSession, gID, cID)
 
 	if err != nil {
 		panic(err)
