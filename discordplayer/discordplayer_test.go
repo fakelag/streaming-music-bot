@@ -177,7 +177,7 @@ var _ = Describe("Playing music on a voice channel", func() {
 	})
 
 	When("Queueing media in the media queue", func() {
-		It("Enqueues media, consumes it and returns it from GetCurrentlyPlayingMedia", func() {
+		It("Enqueues media, consumes it and returns it from the API", func() {
 			ctrl := gomock.NewController(GinkgoT())
 
 			currentMediaDone := make(chan error)
@@ -237,6 +237,51 @@ var _ = Describe("Playing music on a voice channel", func() {
 					WithTimeout(2 * time.Second).
 					WithPolling(50 * time.Millisecond).
 					Should(BeNil())
+				return
+			case <-time.After(20 * time.Second):
+				Fail("Voice worker timed out")
+			}
+		})
+
+		It("Clears media queue with the API", func() {
+			ctrl := gomock.NewController(GinkgoT())
+
+			currentMediaDone := make(chan error)
+			mockVoiceConnection, dms, mockMedia := JoinMockVoiceChannelAndPlay(ctrl, currentMediaDone, true)
+			Expect(dms.EnqueueMedia(mockMedia)).NotTo(HaveOccurred())
+			Expect(dms.EnqueueMedia(mockMedia)).NotTo(HaveOccurred())
+
+			c := make(chan struct{})
+
+			var wg sync.WaitGroup
+			wg.Add(1)
+
+			mockVoiceConnection.EXPECT().IsReady().Return(true).AnyTimes()
+			mockVoiceConnection.EXPECT().Speaking(gomock.Any()).MaxTimes(2)
+			mockVoiceConnection.EXPECT().Disconnect().Do(func() {
+				wg.Done()
+			})
+
+			Eventually(func() int {
+				return len(dms.GetMediaQueue())
+			}).
+				WithTimeout(5 * time.Second).
+				WithPolling(50 * time.Millisecond).
+				Should(Equal(2))
+
+			Expect(dms.ClearMediaQueue()).To(BeTrue())
+			Expect(dms.GetMediaQueue()).To(HaveLen(0))
+			Expect(dms.ClearMediaQueue()).To(BeFalse())
+
+			Expect(dms.Leave()).To(BeTrue())
+
+			go func() {
+				wg.Wait()
+				close(c)
+			}()
+
+			select {
+			case <-c:
 				return
 			case <-time.After(20 * time.Second):
 				Fail("Voice worker timed out")
