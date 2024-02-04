@@ -111,3 +111,13 @@ func (dms *DiscordMusicSession) Leave() bool {
 	}
 	return false
 }
+
+func (dms *DiscordMusicSession) GetMediaQueue() []entities.Media {
+	dms.mutex.RLock()
+	defer dms.mutex.RUnlock()
+
+	mediaQueueCopy := make([]entities.Media, len(dms.mediaQueue))
+	copy(mediaQueueCopy, dms.mediaQueue)
+
+	return mediaQueueCopy
+}
