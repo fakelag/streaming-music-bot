@@ -18,14 +18,6 @@ type DcaMediaSession struct {
 func (dms *DiscordMusicSession) voiceWorker() {
 	defer dms.disconnectAndExitWorker()
 
-	voiceConnection, err := dms.discordSession.ChannelVoiceJoin(dms.guildID, dms.voiceChannelID, false, false)
-
-	if err != nil {
-		panic(err)
-	}
-
-	dms.voiceConnection = voiceConnection
-
 workerloop:
 	for {
 		mediaFile := dms.consumeNextMediaFile()
@@ -44,7 +36,6 @@ workerloop:
 
 		select {
 		case <-dms.chanLeaveCommand:
-			fmt.Printf("Bot asked to leave while idle\n")
 			break workerloop
 		default:
 			break
@@ -55,9 +46,13 @@ workerloop:
 }
 
 func (dms *DiscordMusicSession) playMediaFile(mediaFile entities.Media) (err error, keepPlaying bool) {
-	// TODO check voice connection OK
+	err = dms.checkDiscordVoiceConnection()
 
-	fmt.Printf("Playing: %s - %t\n", mediaFile.FileURL(), dms.voiceConnection.IsReady())
+	if err != nil {
+		return err, true
+	}
+
+	fmt.Printf("Playing: %s\n", mediaFile.FileURL())
 
 	_ = dms.voiceConnection.Speaking(true)
 
@@ -91,6 +86,8 @@ func (dms *DiscordMusicSession) playMediaFile(mediaFile entities.Media) (err err
 		if session.encodingSession != nil {
 			session.encodingSession.Cleanup()
 		}
+
+		_ = dms.voiceConnection.Speaking(false)
 
 		return nil, false
 	}
@@ -135,6 +132,21 @@ func (dms *DiscordMusicSession) consumeNextMediaFile() entities.Media {
 	nextMediaFile, dms.mediaQueue = dms.mediaQueue[0], dms.mediaQueue[1:]
 
 	return nextMediaFile
+}
+
+func (dms *DiscordMusicSession) checkDiscordVoiceConnection() error {
+	if dms.voiceConnection != nil && dms.voiceConnection.IsReady() {
+		return nil
+	}
+
+	newVoiceConnection, err := dms.discordSession.ChannelVoiceJoin(dms.guildID, dms.voiceChannelID, false, false)
+
+	if err != nil {
+		return err
+	}
+
+	dms.voiceConnection = newVoiceConnection
+	return nil
 }
 
 func (dms *DiscordMusicSession) disconnectAndExitWorker() {
