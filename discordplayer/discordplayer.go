@@ -96,6 +96,18 @@ func (dms *DiscordMusicSession) StartPlaylist(playlist entities.Playlist) {
 func (dms *DiscordMusicSession) ClearPlaylist() {
 }
 
+func (dms *DiscordMusicSession) ClearMediaQueue() bool {
+	dms.mutex.Lock()
+	defer dms.mutex.Unlock()
+
+	if len(dms.mediaQueue) == 0 {
+		return false
+	}
+
+	dms.mediaQueue = make([]entities.Media, 0)
+	return true
+}
+
 func (dms *DiscordMusicSession) Repeat() {
 }
 
