@@ -4,7 +4,8 @@
 ```shell
 mockgen -source=discordplayer/interfaces/dcainterface.go -destination discordplayer/mocks/dcainterface_mock.go \
 mockgen -source=discordplayer/interfaces/discordvoiceinterface.go -destination discordplayer/mocks/discordvoiceinterface_mock.go \
-mockgen -source=discordplayer/interfaces/discordsessioninterface.go -destination discordplayer/mocks/discordsessioninterface_mock.go
+mockgen -source=discordplayer/interfaces/discordsessioninterface.go -destination discordplayer/mocks/discordsessioninterface_mock.go \
+mockgen -source=discordplayer/interfaces/dcastreamingsessioninterface.go -destination discordplayer/mocks/dcastreamingsessioninterface_mock.go
 ```
 
 ### Todo list
@@ -16,11 +17,12 @@ mockgen -source=discordplayer/interfaces/discordsessioninterface.go -destination
 - Jump command
 - Search API
 - Support for media from other sources than YT (twitter?)
-- Reloads on FileURL expiration
+- Reload on FileURL expiration
 - Channel interface when media changes
 - Logger & error handling in discordplayer/voiceworker
 
 #### Done
+- Reload on discord voice error
 - Reconnects to voice on error
 - Proper queue implementation with limit
 	- Queue API to get current media in queue & size
