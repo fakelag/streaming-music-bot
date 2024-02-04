@@ -8,18 +8,21 @@ mockgen -source=discordplayer/interfaces/discordsessioninterface.go -destination
 ```
 
 ### Todo list
-- Proper queue implementation with limit
-	- Queue API to get current media in queue & size
-	- Current media API
-	- Clear media queue API
 - Current playback duration API
 - Skip command
 - Repeat command
 - Playlist
-- Reconnects to voice on error
 - Pause/Resume command
 - Jump command
 - Search API
 - Support for media from other sources than YT (twitter?)
 - Reloads on FileURL expiration
 - Channel interface when media changes
+- Logger & error handling in discordplayer/voiceworker
+
+#### Done
+- Reconnects to voice on error
+- Proper queue implementation with limit
+	- Queue API to get current media in queue & size
+	- Current media API
+	- Clear media queue API
