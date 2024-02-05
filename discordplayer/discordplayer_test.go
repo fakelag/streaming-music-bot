@@ -143,8 +143,8 @@ var _ = Describe("Playing music on a voice channel", func() {
 		}
 	})
 
-	When("The bot is asked to leave with Leave()", func() {
-		It("Starts playing and immediately leaves upon receiving leave command", func() {
+	When("The voice worker is asked to execute commands through the API", func() {
+		It("Starts playing and leaves upon receiving leave command", func() {
 			ctrl := gomock.NewController(GinkgoT())
 
 			currentMediaDone := make(chan error)
@@ -210,6 +210,40 @@ var _ = Describe("Playing music on a voice channel", func() {
 			select {
 			case <-c:
 				Expect(playerContext.dms.Leave()).To(BeFalse())
+				return
+			case <-time.After(20 * time.Second):
+				Fail("Voice worker timed out")
+			}
+		})
+
+		It("Starts playing and skips the current media upon receiving skip command", func() {
+			ctrl := gomock.NewController(GinkgoT())
+
+			currentMediaDone := make(chan error)
+			playerContext := JoinMockVoiceChannelAndPlay(ctrl, currentMediaDone)
+			playerContext.mockVoiceConnection.EXPECT().Speaking(gomock.Any()).AnyTimes()
+
+			Eventually(func() entities.Media {
+				return playerContext.dms.GetCurrentlyPlayingMedia()
+			}).WithTimeout(2 * time.Second).WithPolling(50 * time.Millisecond).ShouldNot(BeNil())
+
+			Expect(playerContext.dms.Skip()).To(BeTrue())
+
+			Eventually(func() entities.Media {
+				return playerContext.dms.GetCurrentlyPlayingMedia()
+			}).WithTimeout(2 * time.Second).WithPolling(50 * time.Millisecond).Should(BeNil())
+
+			disconnectChannel := make(chan struct{})
+			playerContext.mockVoiceConnection.EXPECT().Disconnect().Do(func() {
+				close(currentMediaDone)
+				close(disconnectChannel)
+			})
+
+			Expect(playerContext.dms.Leave()).To(BeTrue())
+
+			select {
+			case <-disconnectChannel:
+				Expect(playerContext.dms.Skip()).To(BeFalse())
 				return
 			case <-time.After(20 * time.Second):
 				Fail("Voice worker timed out")
@@ -573,29 +607,20 @@ var _ = Describe("Playing music on a voice channel", func() {
 
 			Eventually(func() time.Duration {
 				return playerContext.dms.CurrentPlaybackPosition()
-			}).
-				WithTimeout(2 * time.Second).
-				WithPolling(50 * time.Millisecond).
-				Should(Equal(10 * time.Second))
+			}).WithTimeout(2 * time.Second).WithPolling(50 * time.Millisecond).Should(Equal(10 * time.Second))
 
 			// Done playing
 			currentMediaDone <- nil
 
 			Eventually(func() time.Duration {
 				return playerContext.dms.CurrentPlaybackPosition()
-			}).
-				WithTimeout(2 * time.Second).
-				WithPolling(50 * time.Millisecond).
-				Should(Equal(0 * time.Second))
+			}).WithTimeout(2 * time.Second).WithPolling(50 * time.Millisecond).Should(Equal(0 * time.Second))
 
 			Expect(playerContext.dms.Leave()).To(BeTrue())
 
 			Eventually(func() time.Duration {
 				return playerContext.dms.CurrentPlaybackPosition()
-			}).
-				WithTimeout(2 * time.Second).
-				WithPolling(50 * time.Millisecond).
-				Should(Equal(0 * time.Second))
+			}).WithTimeout(2 * time.Second).WithPolling(50 * time.Millisecond).Should(Equal(0 * time.Second))
 
 			go func() {
 				wg.Wait()
