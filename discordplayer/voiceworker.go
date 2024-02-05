@@ -118,6 +118,9 @@ func (dms *DiscordMusicSession) playMediaFile(
 		_ = dms.voiceConnection.Speaking(false)
 
 		return nil, false
+	case <-dms.chanSkipCommand:
+		_ = dms.voiceConnection.Speaking(false)
+		return nil, true
 	}
 }
 

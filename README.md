@@ -9,7 +9,6 @@ mockgen -source=discordplayer/interfaces/dcastreamingsessioninterface.go -destin
 ```
 
 ### Todo list
-- Skip command
 - Repeat command
 - Playlist
 - Pause/Resume command
@@ -21,6 +20,7 @@ mockgen -source=discordplayer/interfaces/dcastreamingsessioninterface.go -destin
 - Logger & error handling in discordplayer/voiceworker
 
 #### Done
+- Skip command
 - Current playback duration API
 - Reload on discord voice error
 - Reconnects to voice on error

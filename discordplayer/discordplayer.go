@@ -30,6 +30,7 @@ type DiscordMusicSession struct {
 
 	workerActive     bool
 	chanLeaveCommand chan bool
+	chanSkipCommand  chan bool
 }
 
 type DiscordMusicSessionOptions struct {
@@ -69,6 +70,7 @@ func NewDiscordMusicSessionEx(
 		mediaQueue:        make([]entities.Media, 0),
 		mediaQueueMaxSize: options.MediaQueueMaxSize,
 		chanLeaveCommand:  make(chan bool, 1),
+		chanSkipCommand:   make(chan bool, 1),
 	}
 
 	return dms, nil
@@ -113,7 +115,15 @@ func (dms *DiscordMusicSession) ClearMediaQueue() bool {
 func (dms *DiscordMusicSession) Repeat() {
 }
 
-func (dms *DiscordMusicSession) Skip() {
+func (dms *DiscordMusicSession) Skip() bool {
+	dms.mutex.Lock()
+	defer dms.mutex.Unlock()
+
+	if dms.workerActive && len(dms.chanSkipCommand) == 0 {
+		dms.chanSkipCommand <- true
+		return true
+	}
+	return false
 }
 
 func (dms *DiscordMusicSession) Leave() bool {
