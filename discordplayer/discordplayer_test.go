@@ -546,4 +546,69 @@ var _ = Describe("Playing music on a voice channel", func() {
 			}
 		})
 	})
+
+	When("Requesting details about the current playing media through the API", func() {
+		It("Returns media playback position if and only if currently playing media", func() {
+			ctrl := gomock.NewController(GinkgoT())
+
+			mockDcaStreamingSession := NewMockDcaStreamingSession(ctrl)
+
+			currentMediaDone := make(chan error)
+			playerContext := JoinMockVoiceChannelAndPlayEx(ctrl, currentMediaDone, false, mockDcaStreamingSession)
+
+			Expect(playerContext.dms.CurrentPlaybackPosition()).To(Equal(time.Duration(0)))
+
+			c := make(chan struct{})
+
+			var wg sync.WaitGroup
+			wg.Add(1)
+
+			Expect(playerContext.dms.EnqueueMedia(playerContext.mockMedia)).NotTo(HaveOccurred())
+
+			mockDcaStreamingSession.EXPECT().PlaybackPosition().Return(10 * time.Second).MinTimes(1)
+			playerContext.mockVoiceConnection.EXPECT().Speaking(gomock.Any()).AnyTimes()
+			playerContext.mockVoiceConnection.EXPECT().Disconnect().Do(func() {
+				wg.Done()
+			})
+
+			Eventually(func() time.Duration {
+				return playerContext.dms.CurrentPlaybackPosition()
+			}).
+				WithTimeout(2 * time.Second).
+				WithPolling(50 * time.Millisecond).
+				Should(Equal(10 * time.Second))
+
+			// Done playing
+			currentMediaDone <- nil
+
+			Eventually(func() time.Duration {
+				return playerContext.dms.CurrentPlaybackPosition()
+			}).
+				WithTimeout(2 * time.Second).
+				WithPolling(50 * time.Millisecond).
+				Should(Equal(0 * time.Second))
+
+			Expect(playerContext.dms.Leave()).To(BeTrue())
+
+			Eventually(func() time.Duration {
+				return playerContext.dms.CurrentPlaybackPosition()
+			}).
+				WithTimeout(2 * time.Second).
+				WithPolling(50 * time.Millisecond).
+				Should(Equal(0 * time.Second))
+
+			go func() {
+				wg.Wait()
+				close(c)
+				close(currentMediaDone)
+			}()
+
+			select {
+			case <-c:
+				return
+			case <-time.After(20 * time.Second):
+				Fail("Voice worker timed out")
+			}
+		})
+	})
 })
