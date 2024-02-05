@@ -68,8 +68,8 @@ func (dms *DiscordMusicSession) playMediaFile(
 		return err, true
 	}
 
-	dms.setCurrentlyPlayingMedia(mediaFile)
-	defer dms.setCurrentlyPlayingMedia(nil) // TODO: Think about this again when implementing reloads
+	dms.setCurrentlyPlayingMediaAndSession(mediaFile, session)
+	defer dms.setCurrentlyPlayingMediaAndSession(nil, nil)
 
 	select {
 	case err := <-session.done:
@@ -195,8 +195,9 @@ func (dms *DiscordMusicSession) isWorkerActive() bool {
 	return dms.workerActive
 }
 
-func (dms *DiscordMusicSession) setCurrentlyPlayingMedia(media entities.Media) {
+func (dms *DiscordMusicSession) setCurrentlyPlayingMediaAndSession(media entities.Media, session *DcaMediaSession) {
 	dms.mutex.Lock()
 	defer dms.mutex.Unlock()
 	dms.currentlyPlayingMedia = media
+	dms.currentMediaSession = session
 }

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"musicbot/entities"
 	"sync"
+	"time"
 
 	. "musicbot/discordplayer/interfaces"
 
@@ -22,6 +23,7 @@ type DiscordMusicSession struct {
 	dca             DiscordAudio
 	voiceConnection DiscordVoiceConnection
 
+	currentMediaSession   *DcaMediaSession
 	currentlyPlayingMedia entities.Media
 	mediaQueue            []entities.Media
 	mediaQueueMaxSize     int
@@ -139,4 +141,15 @@ func (dms *DiscordMusicSession) GetCurrentlyPlayingMedia() entities.Media {
 	dms.mutex.RLock()
 	defer dms.mutex.RUnlock()
 	return dms.currentlyPlayingMedia
+}
+
+func (dms *DiscordMusicSession) CurrentPlaybackPosition() time.Duration {
+	dms.mutex.RLock()
+	defer dms.mutex.RUnlock()
+
+	if dms.currentMediaSession == nil {
+		return time.Duration(0)
+	}
+
+	return dms.currentMediaSession.streamingSession.PlaybackPosition()
 }
