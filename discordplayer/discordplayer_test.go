@@ -249,6 +249,61 @@ var _ = Describe("Playing music on a voice channel", func() {
 				Fail("Voice worker timed out")
 			}
 		})
+
+		It("Repeats the current media upon receiving repeat command", func() {
+			ctrl := gomock.NewController(GinkgoT())
+
+			currentMediaDone := make(chan error)
+			playerContext := JoinMockVoiceChannelAndPlay(ctrl, currentMediaDone)
+			playerContext.mockVoiceConnection.EXPECT().Speaking(gomock.Any()).AnyTimes()
+			playerContext.mockVoiceConnection.EXPECT().IsReady().Return(true).AnyTimes()
+			playerContext.mockDca.EXPECT().EncodeFile(playerContext.mockMedia.FileURL(), gomock.Any()).Return(nil, nil).AnyTimes()
+
+			// Done to current media
+			currentMediaDone <- nil
+
+			Eventually(func() entities.Media {
+				return playerContext.dms.GetCurrentlyPlayingMedia()
+			}).WithTimeout(5 * time.Second).WithPolling(50 * time.Millisecond).Should(BeNil())
+
+			repeatAlreadySet, err := playerContext.dms.Repeat()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(repeatAlreadySet).To(BeFalse())
+
+			Eventually(func() entities.Media {
+				return playerContext.dms.GetCurrentlyPlayingMedia()
+			}).WithTimeout(5 * time.Second).WithPolling(50 * time.Millisecond).ShouldNot(BeNil())
+
+			repeatAlreadySet, err = playerContext.dms.Repeat()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(repeatAlreadySet).To(BeFalse())
+
+			// Done done to first repeat
+			currentMediaDone <- nil
+
+			// Done to second repeat
+			currentMediaDone <- nil
+
+			Eventually(func() entities.Media {
+				return playerContext.dms.GetCurrentlyPlayingMedia()
+			}).WithTimeout(5 * time.Second).WithPolling(50 * time.Millisecond).Should(BeNil())
+
+			c := make(chan struct{})
+
+			playerContext.mockVoiceConnection.EXPECT().Disconnect().Do(func() {
+				close(currentMediaDone)
+				close(c)
+			})
+
+			Expect(playerContext.dms.Leave()).To(BeTrue())
+
+			select {
+			case <-c:
+				return
+			case <-time.After(20 * time.Second):
+				Fail("Voice worker timed out")
+			}
+		})
 	})
 
 	When("Queueing media in the media queue", func() {
