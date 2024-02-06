@@ -38,6 +38,14 @@ workerloop:
 		select {
 		case <-dms.chanLeaveCommand:
 			break workerloop
+		case <-dms.chanRepeatCommand:
+			dms.mutex.RLock()
+			repeatMedia := dms.lastCompletedMedia
+			dms.mutex.RUnlock()
+
+			if repeatMedia != nil {
+				dms.EnqueueMedia(repeatMedia)
+			}
 		default:
 			break
 		}
@@ -70,6 +78,7 @@ func (dms *DiscordMusicSession) playMediaFile(
 
 	dms.setCurrentlyPlayingMediaAndSession(mediaFile, session)
 	defer dms.setCurrentlyPlayingMediaAndSession(nil, nil)
+	defer dms.setLastCompletedMedia(mediaFile)
 
 	select {
 	case err := <-session.done:
@@ -203,4 +212,10 @@ func (dms *DiscordMusicSession) setCurrentlyPlayingMediaAndSession(media entitie
 	defer dms.mutex.Unlock()
 	dms.currentlyPlayingMedia = media
 	dms.currentMediaSession = session
+}
+
+func (dms *DiscordMusicSession) setLastCompletedMedia(media entities.Media) {
+	dms.mutex.Lock()
+	defer dms.mutex.Unlock()
+	dms.lastCompletedMedia = media
 }

@@ -25,12 +25,14 @@ type DiscordMusicSession struct {
 
 	currentMediaSession   *DcaMediaSession
 	currentlyPlayingMedia entities.Media
+	lastCompletedMedia    entities.Media
 	mediaQueue            []entities.Media
 	mediaQueueMaxSize     int
 
-	workerActive     bool
-	chanLeaveCommand chan bool
-	chanSkipCommand  chan bool
+	workerActive      bool
+	chanLeaveCommand  chan bool
+	chanSkipCommand   chan bool
+	chanRepeatCommand chan bool
 }
 
 type DiscordMusicSessionOptions struct {
@@ -71,6 +73,7 @@ func NewDiscordMusicSessionEx(
 		mediaQueueMaxSize: options.MediaQueueMaxSize,
 		chanLeaveCommand:  make(chan bool, 1),
 		chanSkipCommand:   make(chan bool, 1),
+		chanRepeatCommand: make(chan bool, 1),
 	}
 
 	return dms, nil
@@ -112,29 +115,32 @@ func (dms *DiscordMusicSession) ClearMediaQueue() bool {
 	return true
 }
 
-func (dms *DiscordMusicSession) Repeat() {
+func (dms *DiscordMusicSession) Repeat() (repeatAlreadySet bool, err error) {
+	dms.mutex.Lock()
+
+	if dms.workerActive {
+		if len(dms.chanRepeatCommand) == 0 {
+			dms.chanRepeatCommand <- true
+			dms.mutex.Unlock()
+			return false, nil
+		}
+
+		// Repeat command already sent
+		dms.mutex.Unlock()
+		return true, nil
+	}
+
+	dms.mutex.Unlock()
+	err = dms.EnqueueMedia(dms.lastCompletedMedia)
+	return false, err
 }
 
 func (dms *DiscordMusicSession) Skip() bool {
-	dms.mutex.Lock()
-	defer dms.mutex.Unlock()
-
-	if dms.workerActive && len(dms.chanSkipCommand) == 0 {
-		dms.chanSkipCommand <- true
-		return true
-	}
-	return false
+	return dms.sendCommand(dms.chanSkipCommand)
 }
 
 func (dms *DiscordMusicSession) Leave() bool {
-	dms.mutex.Lock()
-	defer dms.mutex.Unlock()
-
-	if dms.workerActive && len(dms.chanLeaveCommand) == 0 {
-		dms.chanLeaveCommand <- true
-		return true
-	}
-	return false
+	return dms.sendCommand(dms.chanLeaveCommand)
 }
 
 func (dms *DiscordMusicSession) GetMediaQueue() []entities.Media {
@@ -162,4 +168,15 @@ func (dms *DiscordMusicSession) CurrentPlaybackPosition() time.Duration {
 	}
 
 	return dms.currentMediaSession.streamingSession.PlaybackPosition()
+}
+
+func (dms *DiscordMusicSession) sendCommand(command chan bool) bool {
+	dms.mutex.Lock()
+	defer dms.mutex.Unlock()
+
+	if dms.workerActive && len(command) == 0 {
+		command <- true
+		return true
+	}
+	return false
 }
