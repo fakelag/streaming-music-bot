@@ -178,7 +178,7 @@ var _ = Describe("Playing music on a voice channel", func() {
 			}
 		})
 
-		It("Returns false from Leave() before the bot has joined & after it has left", func() {
+		It("Returns an error from Leave() before the bot has joined & after it has left", func() {
 			ctrl := gomock.NewController(GinkgoT())
 
 			currentMediaDone := make(chan error)
@@ -190,7 +190,7 @@ var _ = Describe("Playing music on a voice channel", func() {
 			var wg sync.WaitGroup
 			wg.Add(1)
 
-			Expect(playerContext.dms.Leave()).To(MatchError("voice worker inactive"))
+			Expect(playerContext.dms.Leave()).To(MatchError(discordplayer.ErrorWorkerNotActive))
 
 			playerContext.dms.EnqueueMedia(playerContext.mockMedia)
 
@@ -209,7 +209,7 @@ var _ = Describe("Playing music on a voice channel", func() {
 
 			select {
 			case <-c:
-				Expect(playerContext.dms.Leave()).To(MatchError("voice worker inactive"))
+				Expect(playerContext.dms.Leave()).To(MatchError(discordplayer.ErrorWorkerNotActive))
 				return
 			case <-time.After(20 * time.Second):
 				Fail("Voice worker timed out")
@@ -243,7 +243,7 @@ var _ = Describe("Playing music on a voice channel", func() {
 
 			select {
 			case <-disconnectChannel:
-				Expect(playerContext.dms.Skip()).To(MatchError("voice worker inactive"))
+				Expect(playerContext.dms.Skip()).To(MatchError(discordplayer.ErrorWorkerNotActive))
 				return
 			case <-time.After(20 * time.Second):
 				Fail("Voice worker timed out")
