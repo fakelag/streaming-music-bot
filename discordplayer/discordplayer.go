@@ -150,6 +150,30 @@ func (dms *DiscordMusicSession) Repeat() error {
 	return err
 }
 
+func (dms *DiscordMusicSession) SetPaused(paused bool) error {
+	dms.mutex.RLock()
+	defer dms.mutex.RUnlock()
+
+	if dms.currentMediaSession == nil {
+		return ErrorNotStreaming
+	}
+
+	dms.currentMediaSession.streamingSession.SetPaused(paused)
+	return nil
+}
+
+func (dms *DiscordMusicSession) IsPaused() (bool, error) {
+	dms.mutex.RLock()
+	defer dms.mutex.RUnlock()
+
+	if dms.currentMediaSession == nil {
+		return false, ErrorNotStreaming
+	}
+
+	isPaused := dms.currentMediaSession.streamingSession.Paused()
+	return isPaused, nil
+}
+
 func (dms *DiscordMusicSession) Skip() error {
 	return dms.sendCommand(dms.chanSkipCommand)
 }
