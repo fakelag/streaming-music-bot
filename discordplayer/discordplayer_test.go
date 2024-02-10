@@ -16,15 +16,15 @@ import (
 )
 
 type MockMedia struct {
-	DisableReloadFromTS bool
+	DisableJumpToTS bool
 }
 
 func (mm *MockMedia) FileURL() string {
 	return "mockurl"
 }
 
-func (mm *MockMedia) CanReloadFromTimeStamp() bool {
-	return !mm.DisableReloadFromTS
+func (mm *MockMedia) CanJumpToTimeStamp() bool {
+	return !mm.DisableJumpToTS
 }
 
 func (mm *MockMedia) Duration() *time.Duration {
@@ -358,6 +358,89 @@ var _ = Describe("Playing music on a voice channel", func() {
 				Fail("Voice worker timed out")
 			}
 		})
+
+		It("Jumps to a timestamp in the currently playing media upon receiving the jump command", func() {
+			ctrl := gomock.NewController(GinkgoT())
+
+			currentMediaDone := make(chan error)
+			playerContext := JoinMockVoiceChannelAndPlay(ctrl, currentMediaDone)
+
+			jumpToTimeStamp := 30 * time.Second
+			playbackPositionAtReload := 0
+			c := make(chan struct{})
+
+			gomock.InOrder(
+				playerContext.mockVoiceConnection.EXPECT().Speaking(false),
+				playerContext.mockVoiceConnection.EXPECT().IsReady().Return(true),
+				playerContext.mockVoiceConnection.EXPECT().Speaking(true),
+				playerContext.mockDca.EXPECT().EncodeFile(playerContext.mockMedia.FileURL(), gomock.Any()).
+					Return(nil, nil).
+					Do(func(path string, encodeOptions *dca.EncodeOptions) {
+						playbackPositionAtReload = encodeOptions.StartTime
+					}),
+				playerContext.mockVoiceConnection.EXPECT().Speaking(false),
+				playerContext.mockVoiceConnection.EXPECT().Disconnect().Do(func() {
+					close(c)
+				}),
+			)
+
+			Eventually(func() entities.Media {
+				return playerContext.dms.GetCurrentlyPlayingMedia()
+			}).WithTimeout(5 * time.Second).WithPolling(50 * time.Millisecond).ShouldNot(BeNil())
+
+			Expect(playerContext.dms.Jump(jumpToTimeStamp)).To(Succeed())
+
+			go func() {
+				time.Sleep(2 * time.Second)
+				Expect(playerContext.dms.Leave()).To(Succeed())
+			}()
+
+			select {
+			case <-c:
+				Expect(playbackPositionAtReload).To(BeNumerically("~", 30, 1))
+				return
+			case <-time.After(20 * time.Second):
+				Fail("Voice worker timed out")
+			}
+		})
+
+		It("Returns sensible errors from jump command if jumping to the given TS is not possible", func() {
+			ctrl := gomock.NewController(GinkgoT())
+
+			currentMediaDone := make(chan error)
+			playerContext := JoinMockVoiceChannelAndPlay(ctrl, currentMediaDone)
+
+			c := make(chan struct{})
+
+			gomock.InOrder(
+				playerContext.mockVoiceConnection.EXPECT().Speaking(false),
+				playerContext.mockVoiceConnection.EXPECT().Disconnect().Do(func() {
+					close(c)
+				}),
+			)
+
+			Eventually(func() entities.Media {
+				return playerContext.dms.GetCurrentlyPlayingMedia()
+			}).WithTimeout(5 * time.Second).WithPolling(50 * time.Millisecond).ShouldNot(BeNil())
+
+			Expect(playerContext.dms.Jump(-1 * time.Second)).To(MatchError(discordplayer.ErrorInvalidArgument))
+			playerContext.mockMedia.DisableJumpToTS = true
+			Expect(playerContext.dms.Jump(30 * time.Second)).To(MatchError(discordplayer.ErrorMediaUnsupportedFeature))
+			playerContext.mockMedia.DisableJumpToTS = false
+			Expect(playerContext.dms.Jump(70 * time.Second)).To(MatchError(discordplayer.ErrorInvalidArgument))
+
+			go func() {
+				time.Sleep(2 * time.Second)
+				Expect(playerContext.dms.Leave()).To(Succeed())
+			}()
+
+			select {
+			case <-c:
+				return
+			case <-time.After(20 * time.Second):
+				Fail("Voice worker timed out")
+			}
+		})
 	})
 
 	When("Queueing media in the media queue", func() {
@@ -594,7 +677,7 @@ var _ = Describe("Playing music on a voice channel", func() {
 			currentMediaDone := make(chan error)
 			playerContext := JoinMockVoiceChannelAndPlayEx(ctrl, currentMediaDone, true, mockDcaStreamingSession)
 
-			playerContext.mockMedia.DisableReloadFromTS = disableReloadFromTS
+			playerContext.mockMedia.DisableJumpToTS = disableReloadFromTS
 
 			c := make(chan struct{})
 
@@ -638,7 +721,7 @@ var _ = Describe("Playing music on a voice channel", func() {
 
 			select {
 			case <-c:
-				if playerContext.mockMedia.DisableReloadFromTS {
+				if playerContext.mockMedia.DisableJumpToTS {
 					Expect(encoderCalledWithStartTime).To(Equal(0))
 				} else {
 					Expect(encoderCalledWithStartTime).To(BeNumerically("~", 10, 1))

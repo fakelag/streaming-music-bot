@@ -10,7 +10,6 @@ mockgen -source=discordplayer/interfaces/dcastreamingsessioninterface.go -destin
 
 ### Todo list
 - Playlist
-- Jump command
 - Search API
 - Support for media from other sources than YT (twitter?)
 - Reload on FileURL expiration
@@ -18,6 +17,7 @@ mockgen -source=discordplayer/interfaces/dcastreamingsessioninterface.go -destin
 - Logger & error handling in discordplayer/voiceworker
 
 #### Done
+- Jump command
 - Pause/Resume command
 - Repeat command
 - Skip command
