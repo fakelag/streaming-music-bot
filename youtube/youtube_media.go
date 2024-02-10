@@ -18,7 +18,7 @@ func (ytm *YoutubeMedia) FileURL() string {
 	return ytm.StreamURL
 }
 
-func (ytm *YoutubeMedia) CanReloadFromTimeStamp() bool {
+func (ytm *YoutubeMedia) CanJumpToTimeStamp() bool {
 	return !ytm.IsLiveStream
 }
 

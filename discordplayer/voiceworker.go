@@ -111,7 +111,7 @@ func (dms *DiscordMusicSession) playMediaFile(
 
 		reloadPlaybackStartAt := time.Duration(0)
 
-		if mediaFile.CanReloadFromTimeStamp() {
+		if mediaFile.CanJumpToTimeStamp() {
 			reloadPlaybackStartAt = session.streamingSession.PlaybackPosition()
 		}
 
@@ -127,6 +127,14 @@ func (dms *DiscordMusicSession) playMediaFile(
 		_ = dms.voiceConnection.Speaking(false)
 
 		return nil, false
+	case jumpTo := <-dms.chanJumpCommand:
+		if session.encodingSession != nil {
+			session.encodingSession.Cleanup()
+		}
+
+		_ = dms.voiceConnection.Speaking(false)
+
+		return dms.playMediaFile(mediaFile, jumpTo)
 	case <-dms.chanSkipCommand:
 		_ = dms.voiceConnection.Speaking(false)
 		return nil, true

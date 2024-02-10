@@ -4,6 +4,6 @@ import "time"
 
 type Media interface {
 	FileURL() string
-	CanReloadFromTimeStamp() bool
+	CanJumpToTimeStamp() bool
 	Duration() *time.Duration
 }

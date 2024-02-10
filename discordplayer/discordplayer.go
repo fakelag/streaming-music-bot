@@ -12,12 +12,14 @@ import (
 )
 
 var (
-	ErrorWorkerNotActive    = errors.New("voice worker inactive")
-	ErrorNotStreaming       = errors.New("not currently streaming")
-	ErrorCommandAlreadySent = errors.New("command already sent")
-	ErrorInvalidMedia       = errors.New("invalid media")
-	ErrorMediaQueueFull     = errors.New("media queue full")
-	ErrorNoMediaToRepeat    = errors.New("no media to repeat")
+	ErrorWorkerNotActive         = errors.New("voice worker inactive")
+	ErrorNotStreaming            = errors.New("not currently streaming")
+	ErrorCommandAlreadySent      = errors.New("command already sent")
+	ErrorInvalidMedia            = errors.New("invalid media")
+	ErrorMediaQueueFull          = errors.New("media queue full")
+	ErrorNoMediaFound            = errors.New("no media found")
+	ErrorMediaUnsupportedFeature = errors.New("unsupported feature by current media")
+	ErrorInvalidArgument         = errors.New("invalid argument")
 )
 
 type DiscordMusicSession struct {
@@ -42,6 +44,7 @@ type DiscordMusicSession struct {
 	chanLeaveCommand  chan bool
 	chanSkipCommand   chan bool
 	chanRepeatCommand chan bool
+	chanJumpCommand   chan time.Duration
 }
 
 type DiscordMusicSessionOptions struct {
@@ -83,6 +86,7 @@ func NewDiscordMusicSessionEx(
 		chanLeaveCommand:  make(chan bool, 1),
 		chanSkipCommand:   make(chan bool, 1),
 		chanRepeatCommand: make(chan bool, 1),
+		chanJumpCommand:   make(chan time.Duration, 1),
 	}
 
 	return dms, nil
@@ -141,7 +145,7 @@ func (dms *DiscordMusicSession) Repeat() error {
 		dms.mutex.RUnlock()
 
 		if lastCompletedMedia == nil {
-			return ErrorNoMediaToRepeat
+			return ErrorNoMediaFound
 		}
 
 		return dms.EnqueueMedia(lastCompletedMedia)
@@ -180,6 +184,44 @@ func (dms *DiscordMusicSession) Skip() error {
 
 func (dms *DiscordMusicSession) Leave() error {
 	return dms.sendCommand(dms.chanLeaveCommand)
+}
+
+func (dms *DiscordMusicSession) Jump(jumpTo time.Duration) error {
+	if jumpTo < 0 {
+		return ErrorInvalidArgument
+	}
+
+	currentMedia := dms.GetCurrentlyPlayingMedia()
+
+	if currentMedia == nil {
+		return ErrorNoMediaFound
+	}
+
+	if !currentMedia.CanJumpToTimeStamp() {
+		return ErrorMediaUnsupportedFeature
+	}
+
+	duration := currentMedia.Duration()
+
+	if duration != nil {
+		if *duration < jumpTo {
+			return ErrorInvalidArgument
+		}
+	}
+
+	dms.mutex.Lock()
+	defer dms.mutex.Unlock()
+
+	if !dms.workerActive {
+		return ErrorWorkerNotActive
+	}
+
+	if len(dms.chanJumpCommand) > 0 {
+		return ErrorCommandAlreadySent
+	}
+
+	dms.chanJumpCommand <- jumpTo
+	return nil
 }
 
 func (dms *DiscordMusicSession) GetMediaQueue() []entities.Media {
