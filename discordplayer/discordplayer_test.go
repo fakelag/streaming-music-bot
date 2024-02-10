@@ -302,6 +302,62 @@ var _ = Describe("Playing music on a voice channel", func() {
 				Fail("Voice worker timed out")
 			}
 		})
+
+		It("Pauses & unpauses the current music streaming session upon receiving the pause command", func() {
+			ctrl := gomock.NewController(GinkgoT())
+
+			currentMediaDone := make(chan error)
+			mockDcaStreamingSession := NewMockDcaStreamingSession(ctrl)
+			playerContext := JoinMockVoiceChannelAndPlayEx(ctrl, currentMediaDone, true, mockDcaStreamingSession)
+
+			mockIsPaused := false
+			mockDcaStreamingSession.EXPECT().SetPaused(gomock.Any()).Do(func(pause bool) {
+				mockIsPaused = pause
+			}).Times(2)
+			mockDcaStreamingSession.EXPECT().Paused().DoAndReturn(func() bool {
+				return mockIsPaused
+			}).MinTimes(1)
+
+			c := make(chan struct{})
+
+			Eventually(func() error {
+				_, err := playerContext.dms.IsPaused()
+				return err
+			}).WithPolling(50 * time.Millisecond).WithTimeout(1 * time.Second).Should(Succeed())
+
+			isPaused, err := playerContext.dms.IsPaused()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(isPaused).To(BeFalse())
+
+			Expect(playerContext.dms.SetPaused(true)).To(Succeed())
+
+			isPaused, err = playerContext.dms.IsPaused()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(isPaused).To(BeTrue())
+
+			Expect(playerContext.dms.SetPaused(false)).To(Succeed())
+
+			isPaused, err = playerContext.dms.IsPaused()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(isPaused).To(BeFalse())
+
+			go func() {
+				time.Sleep(1 * time.Second)
+				currentMediaDone <- nil
+				close(currentMediaDone)
+			}()
+
+			playerContext.mockVoiceConnection.EXPECT().Speaking(false).Do(func(b bool) {
+				close(c)
+			})
+
+			select {
+			case <-c:
+				return
+			case <-time.After(20 * time.Second):
+				Fail("Voice worker timed out")
+			}
+		})
 	})
 
 	When("Queueing media in the media queue", func() {
