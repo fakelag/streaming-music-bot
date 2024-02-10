@@ -11,6 +11,15 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
+var (
+	ErrorWorkerNotActive    = errors.New("voice worker inactive")
+	ErrorNotStreaming       = errors.New("not currently streaming")
+	ErrorCommandAlreadySent = errors.New("command already sent")
+	ErrorInvalidMedia       = errors.New("invalid media")
+	ErrorMediaQueueFull     = errors.New("media queue full")
+	ErrorNoMediaToRepeat    = errors.New("no media to repeat")
+)
+
 type DiscordMusicSession struct {
 	mutex sync.RWMutex
 
@@ -83,8 +92,12 @@ func (dms *DiscordMusicSession) EnqueueMedia(media entities.Media) error {
 	dms.mutex.Lock()
 	defer dms.mutex.Unlock()
 
+	if media == nil {
+		return ErrorInvalidMedia
+	}
+
 	if len(dms.mediaQueue) == dms.mediaQueueMaxSize {
-		return errors.New("queue full")
+		return ErrorMediaQueueFull
 	}
 
 	dms.mediaQueue = append(dms.mediaQueue, media)
@@ -115,31 +128,33 @@ func (dms *DiscordMusicSession) ClearMediaQueue() bool {
 	return true
 }
 
-func (dms *DiscordMusicSession) Repeat() (repeatAlreadySet bool, err error) {
-	dms.mutex.Lock()
+func (dms *DiscordMusicSession) Repeat() error {
+	err := dms.sendCommand(dms.chanRepeatCommand)
 
-	if dms.workerActive {
-		if len(dms.chanRepeatCommand) == 0 {
-			dms.chanRepeatCommand <- true
-			dms.mutex.Unlock()
-			return false, nil
-		}
-
-		// Repeat command already sent
-		dms.mutex.Unlock()
-		return true, nil
+	if err == nil {
+		return nil
 	}
 
-	dms.mutex.Unlock()
-	err = dms.EnqueueMedia(dms.lastCompletedMedia)
-	return false, err
+	if errors.Is(err, ErrorWorkerNotActive) {
+		dms.mutex.RLock()
+		lastCompletedMedia := dms.lastCompletedMedia
+		dms.mutex.RUnlock()
+
+		if lastCompletedMedia == nil {
+			return ErrorNoMediaToRepeat
+		}
+
+		return dms.EnqueueMedia(lastCompletedMedia)
+	}
+
+	return err
 }
 
-func (dms *DiscordMusicSession) Skip() bool {
+func (dms *DiscordMusicSession) Skip() error {
 	return dms.sendCommand(dms.chanSkipCommand)
 }
 
-func (dms *DiscordMusicSession) Leave() bool {
+func (dms *DiscordMusicSession) Leave() error {
 	return dms.sendCommand(dms.chanLeaveCommand)
 }
 
@@ -170,13 +185,18 @@ func (dms *DiscordMusicSession) CurrentPlaybackPosition() time.Duration {
 	return dms.currentMediaSession.streamingSession.PlaybackPosition()
 }
 
-func (dms *DiscordMusicSession) sendCommand(command chan bool) bool {
+func (dms *DiscordMusicSession) sendCommand(command chan bool) error {
 	dms.mutex.Lock()
 	defer dms.mutex.Unlock()
 
-	if dms.workerActive && len(command) == 0 {
-		command <- true
-		return true
+	if !dms.workerActive {
+		return ErrorWorkerNotActive
 	}
-	return false
+
+	if len(command) > 0 {
+		return ErrorCommandAlreadySent
+	}
+
+	command <- true
+	return nil
 }

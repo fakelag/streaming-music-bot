@@ -159,7 +159,7 @@ var _ = Describe("Playing music on a voice channel", func() {
 
 			go func() {
 				time.Sleep(1 * time.Second)
-				Expect(playerContext.dms.Leave()).To(BeTrue())
+				Expect(playerContext.dms.Leave()).To(Succeed())
 
 				wg.Wait()
 				close(c)
@@ -190,13 +190,13 @@ var _ = Describe("Playing music on a voice channel", func() {
 			var wg sync.WaitGroup
 			wg.Add(1)
 
-			Expect(playerContext.dms.Leave()).To(BeFalse())
+			Expect(playerContext.dms.Leave()).To(MatchError("voice worker inactive"))
 
 			playerContext.dms.EnqueueMedia(playerContext.mockMedia)
 
 			go func() {
 				time.Sleep(1 * time.Second)
-				Expect(playerContext.dms.Leave()).To(BeTrue())
+				Expect(playerContext.dms.Leave()).To(Succeed())
 
 				wg.Wait()
 				close(c)
@@ -209,7 +209,7 @@ var _ = Describe("Playing music on a voice channel", func() {
 
 			select {
 			case <-c:
-				Expect(playerContext.dms.Leave()).To(BeFalse())
+				Expect(playerContext.dms.Leave()).To(MatchError("voice worker inactive"))
 				return
 			case <-time.After(20 * time.Second):
 				Fail("Voice worker timed out")
@@ -227,7 +227,7 @@ var _ = Describe("Playing music on a voice channel", func() {
 				return playerContext.dms.GetCurrentlyPlayingMedia()
 			}).WithTimeout(2 * time.Second).WithPolling(50 * time.Millisecond).ShouldNot(BeNil())
 
-			Expect(playerContext.dms.Skip()).To(BeTrue())
+			Expect(playerContext.dms.Skip()).To(Succeed())
 
 			Eventually(func() entities.Media {
 				return playerContext.dms.GetCurrentlyPlayingMedia()
@@ -239,11 +239,11 @@ var _ = Describe("Playing music on a voice channel", func() {
 				close(disconnectChannel)
 			})
 
-			Expect(playerContext.dms.Leave()).To(BeTrue())
+			Expect(playerContext.dms.Leave()).To(Succeed())
 
 			select {
 			case <-disconnectChannel:
-				Expect(playerContext.dms.Skip()).To(BeFalse())
+				Expect(playerContext.dms.Skip()).To(MatchError("voice worker inactive"))
 				return
 			case <-time.After(20 * time.Second):
 				Fail("Voice worker timed out")
@@ -266,17 +266,15 @@ var _ = Describe("Playing music on a voice channel", func() {
 				return playerContext.dms.GetCurrentlyPlayingMedia()
 			}).WithTimeout(5 * time.Second).WithPolling(50 * time.Millisecond).Should(BeNil())
 
-			repeatAlreadySet, err := playerContext.dms.Repeat()
+			err := playerContext.dms.Repeat()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(repeatAlreadySet).To(BeFalse())
 
 			Eventually(func() entities.Media {
 				return playerContext.dms.GetCurrentlyPlayingMedia()
 			}).WithTimeout(5 * time.Second).WithPolling(50 * time.Millisecond).ShouldNot(BeNil())
 
-			repeatAlreadySet, err = playerContext.dms.Repeat()
+			err = playerContext.dms.Repeat()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(repeatAlreadySet).To(BeFalse())
 
 			// Done done to first repeat
 			currentMediaDone <- nil
@@ -295,7 +293,7 @@ var _ = Describe("Playing music on a voice channel", func() {
 				close(c)
 			})
 
-			Expect(playerContext.dms.Leave()).To(BeTrue())
+			Expect(playerContext.dms.Leave()).To(Succeed())
 
 			select {
 			case <-c:
@@ -404,7 +402,7 @@ var _ = Describe("Playing music on a voice channel", func() {
 			Expect(playerContext.dms.GetMediaQueue()).To(HaveLen(0))
 			Expect(playerContext.dms.ClearMediaQueue()).To(BeFalse())
 
-			Expect(playerContext.dms.Leave()).To(BeTrue())
+			Expect(playerContext.dms.Leave()).To(Succeed())
 
 			go func() {
 				wg.Wait()
@@ -437,7 +435,7 @@ var _ = Describe("Playing music on a voice channel", func() {
 				Should(Equal(9))
 
 			Expect(playerContext.dms.EnqueueMedia(playerContext.mockMedia)).NotTo(HaveOccurred())
-			Expect(playerContext.dms.EnqueueMedia(playerContext.mockMedia)).To(MatchError("queue full"))
+			Expect(playerContext.dms.EnqueueMedia(playerContext.mockMedia)).To(MatchError(discordplayer.ErrorMediaQueueFull))
 
 			c := make(chan struct{})
 
@@ -450,7 +448,7 @@ var _ = Describe("Playing music on a voice channel", func() {
 				wg.Done()
 			})
 
-			Expect(playerContext.dms.Leave()).To(BeTrue())
+			Expect(playerContext.dms.Leave()).To(Succeed())
 
 			go func() {
 				wg.Wait()
@@ -514,7 +512,7 @@ var _ = Describe("Playing music on a voice channel", func() {
 			// Done second media
 			currentMediaDone <- nil
 
-			Expect(playerContext.dms.Leave()).To(BeTrue())
+			Expect(playerContext.dms.Leave()).To(Succeed())
 
 			go func() {
 				wg.Wait()
@@ -574,7 +572,7 @@ var _ = Describe("Playing music on a voice channel", func() {
 			// Done to first media after reload
 			currentMediaDone <- nil
 
-			Expect(playerContext.dms.Leave()).To(BeTrue())
+			Expect(playerContext.dms.Leave()).To(Succeed())
 
 			go func() {
 				wg.Wait()
@@ -619,7 +617,7 @@ var _ = Describe("Playing music on a voice channel", func() {
 			// Error on first media
 			currentMediaDone <- errors.New("ffmpeg exited with status code 1")
 
-			Expect(playerContext.dms.Leave()).To(BeTrue())
+			Expect(playerContext.dms.Leave()).To(Succeed())
 
 			go func() {
 				wg.Wait()
@@ -671,7 +669,7 @@ var _ = Describe("Playing music on a voice channel", func() {
 				return playerContext.dms.CurrentPlaybackPosition()
 			}).WithTimeout(2 * time.Second).WithPolling(50 * time.Millisecond).Should(Equal(0 * time.Second))
 
-			Expect(playerContext.dms.Leave()).To(BeTrue())
+			Expect(playerContext.dms.Leave()).To(Succeed())
 
 			Eventually(func() time.Duration {
 				return playerContext.dms.CurrentPlaybackPosition()
