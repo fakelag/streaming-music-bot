@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/rand"
 	cmd "musicbot/command"
+	"musicbot/entities"
 	"musicbot/utils"
 	"os/exec"
 	"regexp"
@@ -26,6 +28,30 @@ type YtDlpVideo struct {
 	Duration     int    `json:"duration"`
 	Thumbnail    string `json:"thumbnail"`
 	IsLiveStream bool   `json:"is_live"`
+}
+
+type YtDlpPlayListThumbnail struct {
+	URL    string `json:"url"`
+	Height int    `json:"height"`
+	Width  int    `json:"width"`
+}
+
+type YtDlpPlayListEntry struct {
+	YtDlpObject
+	ID         string                   `json:"id"`
+	Title      string                   `json:"title"`
+	Duration   int                      `json:"duration"`
+	LiveStatus string                   `json:"live_status"`
+	Thumbnails []YtDlpPlayListThumbnail `json:"thumbnails"`
+}
+
+type YtDlpPlayList struct {
+	YtDlpObject
+	ID            string                `json:"id"`
+	Title         string                `json:"title"`
+	PlaylistCount int                   `json:"playlist_count"`
+	PlaylistURL   string                `json:"webpage_url"`
+	Entries       []*YtDlpPlayListEntry `json:"entries"`
 }
 
 type Youtube struct {
@@ -75,12 +101,8 @@ func (yt *Youtube) GetYoutubeMedia(videoIdOrSearchTerm string) (*YoutubeMedia, e
 		"--no-check-formats",
 		"--max-downloads", "0",
 		"--get-url",
-		"--print-json", // TODO: Remove for playlists
+		"--print-json",
 	}
-
-	// TODO: playlists
-	// 		 --dump-single-json
-	//       --playlist-end 1
 
 	resultChannel, errorChannel := yt.executor.RunCommandWithTimeout(ytDlp, yt.streamUrlTimeout, args...)
 
@@ -144,6 +166,85 @@ func (yt *Youtube) GetYoutubeMedia(videoIdOrSearchTerm string) (*YoutubeMedia, e
 	} else {
 		return nil, errors.New(fmt.Sprintf("Unrecognised object type %s", object.Type))
 	}
+}
+
+func (yt *Youtube) GetYoutubePlaylist(playlistIdOrUrl string) (*YoutubePlaylist, error) {
+	ytDlp, err := getYtDlpPath()
+
+	if err != nil {
+		return nil, err
+	}
+
+	replacer := strings.NewReplacer(
+		"\"", "",
+		"'", "",
+	)
+
+	args := []string{
+		replacer.Replace(playlistIdOrUrl),
+		"--quiet",
+		"--audio-format", "opus",
+		"--ignore-errors",
+		"--no-color",
+		"--no-check-formats",
+		"--max-downloads", "0",
+		"--dump-single-json",
+		"--flat-playlist",
+	}
+
+	resultChannel, errorChannel := yt.executor.RunCommandWithTimeout(ytDlp, yt.streamUrlTimeout, args...)
+
+	var playlistJson string
+
+	select {
+	case result := <-resultChannel:
+		playlistJson = *result
+		break
+	case err := <-errorChannel:
+		return nil, err
+	}
+
+	if len(playlistJson) == 0 {
+		return nil, errors.New("No playlist found")
+	}
+
+	var object YtDlpObject
+	if err := json.Unmarshal([]byte(playlistJson), &object); err != nil {
+		return nil, err
+	}
+
+	if object.Type != "playlist" {
+		return nil, errors.New(fmt.Sprintf("Unrecognised object type %s", object.Type))
+	}
+
+	var ytDlpPlaylist YtDlpPlayList
+	if err := json.Unmarshal([]byte(playlistJson), &ytDlpPlaylist); err != nil {
+		return nil, err
+	}
+
+	rngSource := rand.NewSource(time.Now().Unix())
+	rng := rand.New(rngSource)
+
+	playList := &YoutubePlaylist{
+		ID:                   ytDlpPlaylist.ID,
+		Title:                ytDlpPlaylist.Title,
+		removeMediaOnConsume: true,
+		rng:                  rng,
+		consumeOrder:         entities.ConsumeOrderFromStart,
+		mediaList:            make([]*YoutubeMedia, len(ytDlpPlaylist.Entries)),
+	}
+
+	for index, video := range ytDlpPlaylist.Entries {
+		playList.mediaList[index] = &YoutubeMedia{
+			ID:            video.ID,
+			Title:         video.Title,
+			IsLiveStream:  video.LiveStatus == "is_live",
+			StreamURL:     "",
+			VideoDuration: time.Duration(video.Duration) * time.Second,
+		}
+	}
+
+	return playList, nil
 }
 
 func getYtDlpPath() (string, error) {
