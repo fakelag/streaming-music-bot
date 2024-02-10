@@ -39,6 +39,7 @@ type DiscordMusicSession struct {
 	lastCompletedMedia    entities.Media
 	mediaQueue            []entities.Media
 	mediaQueueMaxSize     int
+	currentPlaylist       entities.Playlist
 
 	workerActive      bool
 	chanLeaveCommand  chan bool
@@ -115,9 +116,20 @@ func (dms *DiscordMusicSession) EnqueueMedia(media entities.Media) error {
 }
 
 func (dms *DiscordMusicSession) StartPlaylist(playlist entities.Playlist) {
+	dms.mutex.Lock()
+	defer dms.mutex.Unlock()
+	dms.currentPlaylist = playlist
+
+	if !dms.workerActive {
+		go dms.voiceWorker()
+		dms.workerActive = true
+	}
 }
 
 func (dms *DiscordMusicSession) ClearPlaylist() {
+	dms.mutex.Lock()
+	defer dms.mutex.Unlock()
+	dms.currentPlaylist = nil
 }
 
 func (dms *DiscordMusicSession) ClearMediaQueue() bool {

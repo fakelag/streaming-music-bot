@@ -1,6 +1,7 @@
 package discordplayer
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	discordinterface "musicbot/discordplayer/interfaces"
@@ -21,7 +22,11 @@ type DcaMediaSession struct {
 func (dms *DiscordMusicSession) voiceWorker() {
 workerloop:
 	for {
-		mediaFile := dms.consumeNextMediaFile()
+		mediaFile := dms.consumeNextMediaFromQueue()
+
+		if mediaFile == nil {
+			mediaFile = dms.consumeNextMediaFromPlaylist()
+		}
 
 		if mediaFile != nil {
 			err, keepPlaying := dms.playMediaFile(mediaFile, time.Duration(0))
@@ -166,7 +171,7 @@ func (dms *DiscordMusicSession) playUrlInDiscord(url string, startPlaybackAt tim
 	}, nil
 }
 
-func (dms *DiscordMusicSession) consumeNextMediaFile() entities.Media {
+func (dms *DiscordMusicSession) consumeNextMediaFromQueue() entities.Media {
 	dms.mutex.Lock()
 	defer dms.mutex.Unlock()
 
@@ -180,6 +185,28 @@ func (dms *DiscordMusicSession) consumeNextMediaFile() entities.Media {
 	nextMediaFile, dms.mediaQueue = dms.mediaQueue[0], dms.mediaQueue[1:]
 
 	return nextMediaFile
+}
+
+func (dms *DiscordMusicSession) consumeNextMediaFromPlaylist() entities.Media {
+	dms.mutex.RLock()
+	defer dms.mutex.RUnlock()
+
+	if dms.currentPlaylist == nil {
+		return nil
+	}
+
+	media, err := dms.currentPlaylist.ConsumeNextMedia()
+
+	if err != nil {
+		if errors.Is(err, entities.ErrorPlaylistEmpty) {
+			// TODO: remove playlist
+			return nil
+		}
+		// TODO: log error
+		return nil
+	}
+
+	return media
 }
 
 func (dms *DiscordMusicSession) checkDiscordVoiceConnection() error {
