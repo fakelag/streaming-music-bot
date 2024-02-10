@@ -9,7 +9,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("Command executor", func() {
+var _ = Describe("Command Executor", func() {
 	It("Runs an executable", func() {
 		executor := &DefaultCommandExecutor{}
 

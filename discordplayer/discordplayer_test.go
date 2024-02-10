@@ -109,7 +109,7 @@ func JoinMockVoiceChannelAndPlay(
 	return JoinMockVoiceChannelAndPlayEx(ctrl, currentMediaDone, true, mockDcaStreamingSession)
 }
 
-var _ = Describe("Playing music on a voice channel", func() {
+var _ = Describe("Discord Player", func() {
 	It("Creates a music session and starts playing media after enqueueing it", func() {
 		ctrl := gomock.NewController(GinkgoT())
 
