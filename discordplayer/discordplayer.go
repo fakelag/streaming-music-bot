@@ -1,6 +1,7 @@
 package discordplayer
 
 import (
+	"context"
 	"errors"
 	"musicbot/entities"
 	"sync"
@@ -29,6 +30,7 @@ type DiscordMusicSession struct {
 	guildID        string
 	voiceChannelID string
 	discordSession DiscordSession
+	ctx            context.Context
 
 	// Worker fields, unlocked access in worker goroutine
 	dca             DiscordAudio
@@ -55,10 +57,12 @@ type DiscordMusicSessionOptions struct {
 }
 
 func NewDiscordMusicSession(
+	ctx context.Context,
 	discord *discordgo.Session,
 	options *DiscordMusicSessionOptions,
 ) (*DiscordMusicSession, error) {
 	return NewDiscordMusicSessionEx(
+		ctx,
 		NewDiscordAudio(),
 		NewDiscordSession(discord),
 		options,
@@ -66,6 +70,7 @@ func NewDiscordMusicSession(
 }
 
 func NewDiscordMusicSessionEx(
+	ctx context.Context,
 	dca DiscordAudio,
 	discord DiscordSession,
 	options *DiscordMusicSessionOptions,
@@ -82,12 +87,9 @@ func NewDiscordMusicSessionEx(
 		voiceConnection:   nil,
 		discordSession:    discord,
 		dca:               dca,
+		ctx:               ctx,
 		mediaQueue:        make([]entities.Media, 0),
 		mediaQueueMaxSize: options.MediaQueueMaxSize,
-		chanLeaveCommand:  make(chan bool, 1),
-		chanSkipCommand:   make(chan bool, 1),
-		chanRepeatCommand: make(chan bool, 1),
-		chanJumpCommand:   make(chan time.Duration, 1),
 	}
 
 	return dms, nil
@@ -107,10 +109,7 @@ func (dms *DiscordMusicSession) EnqueueMedia(media entities.Media) error {
 
 	dms.mediaQueue = append(dms.mediaQueue, media)
 
-	if !dms.workerActive {
-		go dms.voiceWorker()
-		dms.workerActive = true
-	}
+	dms.startVoiceWorkerNoLock(dms.ctx)
 
 	return nil
 }
@@ -120,10 +119,7 @@ func (dms *DiscordMusicSession) StartPlaylist(playlist entities.Playlist) {
 	defer dms.mutex.Unlock()
 	dms.currentPlaylist = playlist
 
-	if !dms.workerActive {
-		go dms.voiceWorker()
-		dms.workerActive = true
-	}
+	dms.startVoiceWorkerNoLock(dms.ctx)
 }
 
 func (dms *DiscordMusicSession) ClearPlaylist() {
@@ -277,4 +273,18 @@ func (dms *DiscordMusicSession) sendCommand(command chan bool) error {
 
 	command <- true
 	return nil
+}
+
+func (dms *DiscordMusicSession) startVoiceWorkerNoLock(ctx context.Context) {
+	if dms.workerActive {
+		return
+	}
+
+	dms.chanLeaveCommand = make(chan bool, 1)
+	dms.chanSkipCommand = make(chan bool, 1)
+	dms.chanRepeatCommand = make(chan bool, 1)
+	dms.chanJumpCommand = make(chan time.Duration, 1)
+
+	go dms.voiceWorker(ctx)
+	dms.workerActive = true
 }

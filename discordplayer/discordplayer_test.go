@@ -1,6 +1,7 @@
 package discordplayer_test
 
 import (
+	"context"
 	"errors"
 	"sync"
 	"time"
@@ -52,6 +53,7 @@ type JoinVoiceAndPlayContext struct {
 }
 
 func JoinMockVoiceChannelAndPlayEx(
+	ctx context.Context,
 	ctrl *gomock.Controller,
 	currentMediaDone chan error,
 	enqueueMedia bool,
@@ -83,7 +85,7 @@ func JoinMockVoiceChannelAndPlayEx(
 			}
 		})
 
-	dms, err := discordplayer.NewDiscordMusicSessionEx(mockDca, mockDiscordSession, &discordplayer.DiscordMusicSessionOptions{
+	dms, err := discordplayer.NewDiscordMusicSessionEx(ctx, mockDca, mockDiscordSession, &discordplayer.DiscordMusicSessionOptions{
 		GuildID:           gID,
 		VoiceChannelID:    cID,
 		MediaQueueMaxSize: 10,
@@ -115,7 +117,7 @@ func JoinMockVoiceChannelAndPlay(
 	currentMediaDone chan error,
 ) *JoinVoiceAndPlayContext {
 	mockDcaStreamingSession := NewMockDcaStreamingSession(ctrl)
-	return JoinMockVoiceChannelAndPlayEx(ctrl, currentMediaDone, true, mockDcaStreamingSession)
+	return JoinMockVoiceChannelAndPlayEx(context.TODO(), ctrl, currentMediaDone, true, mockDcaStreamingSession)
 }
 
 var _ = Describe("Discord Player", func() {
@@ -185,7 +187,7 @@ var _ = Describe("Discord Player", func() {
 			ctrl := gomock.NewController(GinkgoT())
 
 			currentMediaDone := make(chan error)
-			playerContext := JoinMockVoiceChannelAndPlayEx(ctrl, currentMediaDone, false, nil)
+			playerContext := JoinMockVoiceChannelAndPlayEx(context.TODO(), ctrl, currentMediaDone, false, nil)
 			playerContext.mockVoiceConnection.EXPECT().Speaking(false).MaxTimes(2)
 
 			c := make(chan struct{})
@@ -311,7 +313,7 @@ var _ = Describe("Discord Player", func() {
 
 			currentMediaDone := make(chan error)
 			mockDcaStreamingSession := NewMockDcaStreamingSession(ctrl)
-			playerContext := JoinMockVoiceChannelAndPlayEx(ctrl, currentMediaDone, true, mockDcaStreamingSession)
+			playerContext := JoinMockVoiceChannelAndPlayEx(context.TODO(), ctrl, currentMediaDone, true, mockDcaStreamingSession)
 
 			mockIsPaused := false
 			mockDcaStreamingSession.EXPECT().SetPaused(gomock.Any()).Do(func(pause bool) {
@@ -555,7 +557,7 @@ var _ = Describe("Discord Player", func() {
 		It("Gives an error when enqueueing past max queue size", func() {
 			ctrl := gomock.NewController(GinkgoT())
 
-			playerContext := JoinMockVoiceChannelAndPlayEx(ctrl, nil, false, nil)
+			playerContext := JoinMockVoiceChannelAndPlayEx(context.TODO(), ctrl, nil, false, nil)
 
 			// Enqueue 10 media
 			for index := 0; index < 10; index += 1 {
@@ -671,7 +673,7 @@ var _ = Describe("Discord Player", func() {
 			mockDcaStreamingSession := NewMockDcaStreamingSession(ctrl)
 
 			currentMediaDone := make(chan error)
-			playerContext := JoinMockVoiceChannelAndPlayEx(ctrl, currentMediaDone, true, mockDcaStreamingSession)
+			playerContext := JoinMockVoiceChannelAndPlayEx(context.TODO(), ctrl, currentMediaDone, true, mockDcaStreamingSession)
 
 			playerContext.mockMedia.DisableJumpToTS = disableReloadFromTS
 
@@ -776,7 +778,7 @@ var _ = Describe("Discord Player", func() {
 			mockDcaStreamingSession := NewMockDcaStreamingSession(ctrl)
 
 			currentMediaDone := make(chan error)
-			playerContext := JoinMockVoiceChannelAndPlayEx(ctrl, currentMediaDone, false, mockDcaStreamingSession)
+			playerContext := JoinMockVoiceChannelAndPlayEx(context.TODO(), ctrl, currentMediaDone, false, mockDcaStreamingSession)
 
 			Expect(playerContext.dms.CurrentPlaybackPosition()).To(Equal(time.Duration(0)))
 
@@ -831,7 +833,7 @@ var _ = Describe("Discord Player", func() {
 
 			currentMediaDone := make(chan error)
 			mockDcaStreamingSession := NewMockDcaStreamingSession(ctrl)
-			playerContext := JoinMockVoiceChannelAndPlayEx(ctrl, currentMediaDone, false, mockDcaStreamingSession)
+			playerContext := JoinMockVoiceChannelAndPlayEx(context.TODO(), ctrl, currentMediaDone, false, mockDcaStreamingSession)
 
 			expireInFewSeconds := time.Now().Add(2 * time.Second)
 			playerContext.mockMedia.FileURLExpireAt = &expireInFewSeconds
@@ -862,7 +864,72 @@ var _ = Describe("Discord Player", func() {
 			case <-c:
 				Expect(encoderCalledWithStartTime).To(BeNumerically("~", 10, 1))
 				return
-			case <-time.After(40 * time.Second):
+			case <-time.After(20 * time.Second):
+				Fail("Voice worker timed out")
+			}
+		})
+	})
+
+	When("Giving a custom context to DiscordMusicSession", func() {
+		It("Stops the worker and exits gracefully when top-level context is canceled when actively playing media", func() {
+			ctx, cancel := context.WithCancel(context.TODO())
+			ctrl := gomock.NewController(GinkgoT())
+
+			currentMediaDone := make(chan error)
+			mockDcaStreamingSession := NewMockDcaStreamingSession(ctrl)
+			playerContext := JoinMockVoiceChannelAndPlayEx(ctx, ctrl, currentMediaDone, true, mockDcaStreamingSession)
+
+			playerContext.mockVoiceConnection.EXPECT().IsReady().Return(true).AnyTimes()
+
+			c := make(chan struct{})
+
+			gomock.InOrder(
+				playerContext.mockVoiceConnection.EXPECT().Speaking(false),
+				playerContext.mockVoiceConnection.EXPECT().Disconnect().Do(func() {
+					close(c)
+				}),
+			)
+
+			go func() {
+				time.Sleep(1 * time.Second)
+				cancel()
+			}()
+
+			select {
+			case <-c:
+				return
+			case <-time.After(20 * time.Second):
+				Fail("Voice worker timed out")
+			}
+		})
+
+		It("Stops the worker and exits gracefully when top-level context is canceled when not actively playing", func() {
+			ctx, cancel := context.WithCancel(context.TODO())
+			ctrl := gomock.NewController(GinkgoT())
+
+			currentMediaDone := make(chan error)
+			mockDcaStreamingSession := NewMockDcaStreamingSession(ctrl)
+			playerContext := JoinMockVoiceChannelAndPlayEx(ctx, ctrl, currentMediaDone, true, mockDcaStreamingSession)
+
+			playerContext.mockVoiceConnection.EXPECT().Speaking(gomock.Any()).AnyTimes()
+			playerContext.mockVoiceConnection.EXPECT().IsReady().Return(true).AnyTimes()
+
+			c := make(chan struct{})
+
+			playerContext.mockVoiceConnection.EXPECT().Disconnect().Do(func() {
+				close(c)
+			})
+
+			go func() {
+				currentMediaDone <- nil
+				time.Sleep(2 * time.Second)
+				cancel()
+			}()
+
+			select {
+			case <-c:
+				return
+			case <-time.After(20 * time.Second):
 				Fail("Voice worker timed out")
 			}
 		})

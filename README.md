@@ -13,9 +13,9 @@ mockgen -source=discordplayer/interfaces/dcastreamingsessioninterface.go -destin
 - Support for media from other sources than YT (twitter?)
 - Channel interface when media changes
 - Logger & error handling in discordplayer/voiceworker
-- Context based timeout
 
 #### Done
+- Context based timeout
 - Reload on FileURL expiration
 - Playlist
 - Jump command
