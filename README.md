@@ -1,4 +1,4 @@
-## Discord music streaming bot
+## Discord streaming music bot
 
 ## Tests
 ### Generating mocks for tests

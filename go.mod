@@ -1,4 +1,4 @@
-module musicbot
+module github.com/fakelag/streaming-music-bot
 
 go 1.22.0
 

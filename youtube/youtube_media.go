@@ -1,8 +1,9 @@
 package youtube
 
 import (
-	"musicbot/entities"
 	"time"
+
+	"github.com/fakelag/streaming-music-bot/entities"
 )
 
 type YoutubeMedia struct {

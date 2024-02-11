@@ -11,9 +11,9 @@ import (
 	. "github.com/onsi/gomega"
 	"go.uber.org/mock/gomock"
 
-	"musicbot/discordplayer"
-	. "musicbot/discordplayer/mocks"
-	"musicbot/entities"
+	"github.com/fakelag/streaming-music-bot/discordplayer"
+	. "github.com/fakelag/streaming-music-bot/discordplayer/mocks"
+	"github.com/fakelag/streaming-music-bot/entities"
 )
 
 type MockMedia struct {

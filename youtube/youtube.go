@@ -5,15 +5,16 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
-	cmd "musicbot/command"
-	"musicbot/entities"
-	"musicbot/utils"
 	"os/exec"
 	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
 	"time"
+
+	cmd "github.com/fakelag/streaming-music-bot/command"
+	"github.com/fakelag/streaming-music-bot/entities"
+	"github.com/fakelag/streaming-music-bot/utils"
 )
 
 type YtDlpObject struct {

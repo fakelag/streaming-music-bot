@@ -5,13 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	discordinterface "musicbot/discordplayer/interfaces"
-	"musicbot/entities"
 	"strings"
 	"time"
 
+	discordinterface "github.com/fakelag/streaming-music-bot/discordplayer/interfaces"
+	"github.com/fakelag/streaming-music-bot/entities"
+
 	"github.com/fakelag/dca"
-	// . "github.com/onsi/ginkgo/v2"
 )
 
 type DcaMediaSession struct {

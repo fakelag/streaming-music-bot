@@ -2,8 +2,9 @@ package youtube
 
 import (
 	"math/rand"
-	"musicbot/entities"
 	"sync"
+
+	"github.com/fakelag/streaming-music-bot/entities"
 )
 
 type YoutubePlaylist struct {

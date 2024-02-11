@@ -2,8 +2,9 @@ package youtube
 
 import (
 	"math/rand"
-	"musicbot/entities"
 	"time"
+
+	"github.com/fakelag/streaming-music-bot/entities"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"

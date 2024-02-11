@@ -3,11 +3,12 @@ package discordplayer
 import (
 	"context"
 	"errors"
-	"musicbot/entities"
 	"sync"
 	"time"
 
-	. "musicbot/discordplayer/interfaces"
+	"github.com/fakelag/streaming-music-bot/entities"
+
+	. "github.com/fakelag/streaming-music-bot/discordplayer/interfaces"
 
 	"github.com/bwmarrin/discordgo"
 )

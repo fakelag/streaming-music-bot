@@ -3,11 +3,12 @@ package main
 import (
 	"context"
 	"fmt"
-	discordplayer "musicbot/discordplayer"
-	"musicbot/youtube"
 	"os"
 	"os/signal"
 	"time"
+
+	discordplayer "github.com/fakelag/streaming-music-bot/discordplayer"
+	"github.com/fakelag/streaming-music-bot/youtube"
 
 	"github.com/bwmarrin/discordgo"
 )

@@ -3,9 +3,10 @@ package youtube
 import (
 	"errors"
 	"fmt"
-	"musicbot/entities"
 	"strings"
 	"time"
+
+	"github.com/fakelag/streaming-music-bot/entities"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
