@@ -21,6 +21,10 @@ type MockMedia struct {
 	FileURLExpireAt *time.Time
 }
 
+func (mm *MockMedia) Title() string {
+	return "Mock Media"
+}
+
 func (mm *MockMedia) FileURL() string {
 	return "mockurl"
 }

@@ -12,6 +12,7 @@ type Media interface {
 	// Ensure that the current FileURL() is valid. Called before starting an encoding session
 	EnsureLoaded() error
 
+	Title() string
 	CanJumpToTimeStamp() bool
 	Duration() *time.Duration
 }

@@ -146,7 +146,7 @@ func (yt *Youtube) GetYoutubeMedia(videoIdOrSearchTerm string) (*YoutubeMedia, e
 
 		media := &YoutubeMedia{
 			ID:            ytDlpVideo.ID,
-			Title:         ytDlpVideo.Title,
+			VideoTitle:    ytDlpVideo.Title,
 			IsLiveStream:  ytDlpVideo.IsLiveStream,
 			StreamURL:     videoStreamURL,
 			VideoDuration: time.Duration(ytDlpVideo.Duration) * time.Second,
@@ -240,7 +240,7 @@ func (yt *Youtube) GetYoutubePlaylist(playlistIdOrUrl string) (*YoutubePlaylist,
 	for index, video := range ytDlpPlaylist.Entries {
 		playList.mediaList[index] = &YoutubeMedia{
 			ID:            video.ID,
-			Title:         video.Title,
+			VideoTitle:    video.Title,
 			IsLiveStream:  video.LiveStatus == "is_live",
 			StreamURL:     "",
 			VideoDuration: time.Duration(video.Duration) * time.Second,

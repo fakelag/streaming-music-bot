@@ -7,13 +7,17 @@ import (
 
 type YoutubeMedia struct {
 	ID              string
-	Title           string
+	VideoTitle      string
 	IsLiveStream    bool
 	VideoDuration   time.Duration
 	StreamURL       string
 	StreamExpiresAt *time.Time
 	Link            string
 	ytAPI           *Youtube
+}
+
+func (ytm *YoutubeMedia) Title() string {
+	return ytm.VideoTitle
 }
 
 func (ytm *YoutubeMedia) FileURL() string {
