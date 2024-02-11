@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	discordplayer "musicbot/discordplayer"
 	"musicbot/youtube"
@@ -59,7 +60,7 @@ func main() {
 		}
 	}
 
-	dms, err := discordplayer.NewDiscordMusicSession(discord, &discordplayer.DiscordMusicSessionOptions{
+	dms, err := discordplayer.NewDiscordMusicSession(context.TODO(), discord, &discordplayer.DiscordMusicSessionOptions{
 		GuildID:           guild.ID,
 		VoiceChannelID:    channelID,
 		MediaQueueMaxSize: 10,
