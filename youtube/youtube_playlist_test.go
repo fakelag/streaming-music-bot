@@ -13,22 +13,24 @@ func NewPlaylistWithMedia() *YoutubePlaylist {
 	rngSource := rand.NewSource(GinkgoRandomSeed())
 	rng := rand.New(rngSource)
 
+	expireAt := time.Now().Add(10 * time.Minute)
 	media1 := &YoutubeMedia{
 		ID:              "1",
 		Title:           "Mock Media 1",
 		IsLiveStream:    false,
 		VideoDuration:   60 * time.Second,
 		StreamURL:       "streamurl1",
-		StreamExpiresAt: time.Now().Add(10 * time.Minute),
+		StreamExpiresAt: &expireAt,
 	}
 
+	expireAt = time.Now().Add(10 * time.Minute)
 	media2 := &YoutubeMedia{
 		ID:              "2",
 		Title:           "Mock Media 2",
 		IsLiveStream:    true,
 		VideoDuration:   0 * time.Second,
 		StreamURL:       "streamurl2",
-		StreamExpiresAt: time.Now().Add(10 * time.Minute),
+		StreamExpiresAt: &expireAt,
 	}
 
 	return &YoutubePlaylist{

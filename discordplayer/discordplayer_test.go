@@ -32,6 +32,10 @@ func (mm *MockMedia) Duration() *time.Duration {
 	return &oneMinute
 }
 
+func (mm *MockMedia) EnsureLoaded() error {
+	return nil
+}
+
 type JoinVoiceAndPlayContext struct {
 	mockVoiceConnection *MockDiscordVoiceConnection
 	mockDiscordSession  *MockDiscordSession

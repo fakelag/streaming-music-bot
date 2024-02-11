@@ -71,6 +71,12 @@ func (dms *DiscordMusicSession) playMediaFile(
 		return err, true
 	}
 
+	err = mediaFile.EnsureLoaded()
+
+	if err != nil {
+		return err, true
+	}
+
 	fmt.Printf("Playing: %s\n", mediaFile.FileURL())
 
 	_ = dms.voiceConnection.Speaking(true)

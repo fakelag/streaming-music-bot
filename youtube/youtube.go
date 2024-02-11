@@ -150,6 +150,8 @@ func (yt *Youtube) GetYoutubeMedia(videoIdOrSearchTerm string) (*YoutubeMedia, e
 			IsLiveStream:  ytDlpVideo.IsLiveStream,
 			StreamURL:     videoStreamURL,
 			VideoDuration: time.Duration(ytDlpVideo.Duration) * time.Second,
+			Link:          "https://www.youtube.com/watch?v=" + ytDlpVideo.ID,
+			ytAPI:         yt,
 		}
 
 		streamExpireUnixSecondsMatch := yt.streamUrlExpireRegex.FindStringSubmatch(videoStreamURL)
@@ -158,7 +160,8 @@ func (yt *Youtube) GetYoutubeMedia(videoIdOrSearchTerm string) (*YoutubeMedia, e
 			unixSeconds, err := strconv.ParseInt(streamExpireUnixSecondsMatch[3], 10, 64)
 
 			if err == nil && unixSeconds > 0 {
-				media.StreamExpiresAt = time.Unix(unixSeconds, 0)
+				expirationTime := time.Unix(unixSeconds, 0)
+				media.StreamExpiresAt = &expirationTime
 			}
 		}
 
@@ -241,6 +244,8 @@ func (yt *Youtube) GetYoutubePlaylist(playlistIdOrUrl string) (*YoutubePlaylist,
 			IsLiveStream:  video.LiveStatus == "is_live",
 			StreamURL:     "",
 			VideoDuration: time.Duration(video.Duration) * time.Second,
+			Link:          "https://www.youtube.com/watch?v=" + video.ID,
+			ytAPI:         yt,
 		}
 	}
 

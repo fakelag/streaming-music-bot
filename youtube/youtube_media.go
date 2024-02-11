@@ -11,7 +11,9 @@ type YoutubeMedia struct {
 	IsLiveStream    bool
 	VideoDuration   time.Duration
 	StreamURL       string
-	StreamExpiresAt time.Time
+	StreamExpiresAt *time.Time
+	Link            string
+	ytAPI           *Youtube
 }
 
 func (ytm *YoutubeMedia) FileURL() string {
@@ -27,6 +29,21 @@ func (ytm *YoutubeMedia) Duration() *time.Duration {
 		return nil
 	}
 	return &ytm.VideoDuration
+}
+
+func (ytm *YoutubeMedia) EnsureLoaded() error {
+	if ytm.StreamURL == "" || (ytm.StreamExpiresAt != nil && time.Since(*ytm.StreamExpiresAt) > -5*time.Minute) {
+		media, err := ytm.ytAPI.GetYoutubeMedia(ytm.Link)
+
+		if err != nil {
+			return err
+		}
+
+		ytm.StreamURL = media.StreamURL
+		ytm.StreamExpiresAt = media.StreamExpiresAt
+	}
+
+	return nil
 }
 
 // Verify implements entities.Media
