@@ -31,7 +31,11 @@ func main() {
 		panic(err)
 	}
 
-	// discord.Identify.Intents = discordgo.MakeIntent(discordgo.IntentsAll)
+	ytSearchTerm, ok := os.LookupEnv("YT_SEARCH_TERM")
+
+	if !ok {
+		panic("missing YT_SEARCH_TERM")
+	}
 
 	err = discord.Open()
 
@@ -42,7 +46,7 @@ func main() {
 	defer discord.Close()
 
 	yt := youtube.NewYoutubeAPI()
-	media, err := yt.GetYoutubeMedia("dQw4w9WgXcQ")
+	media, err := yt.GetYoutubeMedia(ytSearchTerm)
 
 	if err != nil {
 		panic(err)
