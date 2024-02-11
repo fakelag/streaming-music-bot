@@ -17,6 +17,7 @@ import (
 
 type MockMedia struct {
 	DisableJumpToTS bool
+	FileURLExpireAt *time.Time
 }
 
 func (mm *MockMedia) FileURL() string {
@@ -34,6 +35,10 @@ func (mm *MockMedia) Duration() *time.Duration {
 
 func (mm *MockMedia) EnsureLoaded() error {
 	return nil
+}
+
+func (mm *MockMedia) FileURLExpiresAt() *time.Time {
+	return mm.FileURLExpireAt
 }
 
 type JoinVoiceAndPlayContext struct {
@@ -122,21 +127,15 @@ var _ = Describe("Discord Player", func() {
 
 		c := make(chan struct{})
 
-		var wg sync.WaitGroup
-		wg.Add(1)
-
 		go func() {
 			// "play" music for 1 second and send done signal
 			time.Sleep(1 * time.Second)
 			currentMediaDone <- nil
 			close(currentMediaDone)
-
-			wg.Wait()
-			close(c)
 		}()
 
 		playerContext.mockVoiceConnection.EXPECT().Speaking(false).Do(func(b bool) {
-			wg.Done()
+			close(c)
 		})
 
 		select {
@@ -381,6 +380,7 @@ var _ = Describe("Discord Player", func() {
 					Return(nil, nil).
 					Do(func(path string, encodeOptions *dca.EncodeOptions) {
 						playbackPositionAtReload = encodeOptions.StartTime
+						playerContext.dms.Leave()
 					}),
 				playerContext.mockVoiceConnection.EXPECT().Speaking(false),
 				playerContext.mockVoiceConnection.EXPECT().Disconnect().Do(func() {
@@ -393,11 +393,6 @@ var _ = Describe("Discord Player", func() {
 			}).WithTimeout(5 * time.Second).WithPolling(50 * time.Millisecond).ShouldNot(BeNil())
 
 			Expect(playerContext.dms.Jump(jumpToTimeStamp)).To(Succeed())
-
-			go func() {
-				time.Sleep(2 * time.Second)
-				Expect(playerContext.dms.Leave()).To(Succeed())
-			}()
 
 			select {
 			case <-c:
@@ -433,10 +428,7 @@ var _ = Describe("Discord Player", func() {
 			playerContext.mockMedia.DisableJumpToTS = false
 			Expect(playerContext.dms.Jump(70 * time.Second)).To(MatchError(discordplayer.ErrorInvalidArgument))
 
-			go func() {
-				time.Sleep(2 * time.Second)
-				Expect(playerContext.dms.Leave()).To(Succeed())
-			}()
+			Expect(playerContext.dms.Leave()).To(Succeed())
 
 			select {
 			case <-c:
@@ -828,6 +820,49 @@ var _ = Describe("Discord Player", func() {
 			case <-c:
 				return
 			case <-time.After(20 * time.Second):
+				Fail("Voice worker timed out")
+			}
+		})
+	})
+
+	When("Current media FileURL is about to expire", func() {
+		It("Reloads the player from timestamp before FileURL expires", func() {
+			ctrl := gomock.NewController(GinkgoT())
+
+			currentMediaDone := make(chan error)
+			mockDcaStreamingSession := NewMockDcaStreamingSession(ctrl)
+			playerContext := JoinMockVoiceChannelAndPlayEx(ctrl, currentMediaDone, false, mockDcaStreamingSession)
+
+			expireInFewSeconds := time.Now().Add(2 * time.Second)
+			playerContext.mockMedia.FileURLExpireAt = &expireInFewSeconds
+
+			playerContext.mockVoiceConnection.EXPECT().Speaking(gomock.Any()).AnyTimes()
+			playerContext.mockVoiceConnection.EXPECT().IsReady().Return(true).AnyTimes()
+
+			Expect(playerContext.dms.EnqueueMedia(playerContext.mockMedia)).To(Succeed())
+
+			c := make(chan struct{})
+
+			encoderCalledWithStartTime := 0
+
+			gomock.InOrder(
+				mockDcaStreamingSession.EXPECT().PlaybackPosition().Return(10*time.Second).MinTimes(1),
+				playerContext.mockDca.EXPECT().EncodeFile(playerContext.mockMedia.FileURL(), gomock.Any()).
+					Return(nil, nil).
+					Do(func(path string, encodeOptions *dca.EncodeOptions) {
+						encoderCalledWithStartTime = encodeOptions.StartTime
+						playerContext.dms.Leave()
+					}),
+				playerContext.mockVoiceConnection.EXPECT().Disconnect().Do(func() {
+					close(c)
+				}),
+			)
+
+			select {
+			case <-c:
+				Expect(encoderCalledWithStartTime).To(BeNumerically("~", 10, 1))
+				return
+			case <-time.After(40 * time.Second):
 				Fail("Voice worker timed out")
 			}
 		})

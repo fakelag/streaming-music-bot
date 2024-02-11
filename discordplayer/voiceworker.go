@@ -29,15 +29,27 @@ workerloop:
 		}
 
 		if mediaFile != nil {
-			err, keepPlaying := dms.playMediaFile(mediaFile, time.Duration(0))
+			keepPlayingCurrentMedia := true
+			keepPlayingCurrentMediaFrom := time.Duration(0)
 
-			if err != nil {
-				fmt.Printf("Error occurred while playing: %s\n", err.Error())
+			for keepPlayingCurrentMedia {
+				var err error
+				var exitWorker bool
+
+				err, exitWorker, keepPlayingCurrentMedia, keepPlayingCurrentMediaFrom = dms.playMediaFile(
+					mediaFile,
+					keepPlayingCurrentMediaFrom,
+				)
+
+				if err != nil {
+					fmt.Printf("Error occurred while playing: %s\n", err.Error())
+				}
+
+				if exitWorker {
+					break workerloop
+				}
 			}
 
-			if !keepPlaying {
-				break workerloop
-			}
 		}
 
 		select {
@@ -64,17 +76,22 @@ workerloop:
 func (dms *DiscordMusicSession) playMediaFile(
 	mediaFile entities.Media,
 	startPlaybackAt time.Duration,
-) (err error, keepPlaying bool) {
+) (
+	err error,
+	exitWorker bool,
+	keepPlayingCurrentMedia bool,
+	keepPlayingCurrentMediaFrom time.Duration,
+) {
 	err = dms.checkDiscordVoiceConnection()
 
 	if err != nil {
-		return err, true
+		return
 	}
 
 	err = mediaFile.EnsureLoaded()
 
 	if err != nil {
-		return err, true
+		return
 	}
 
 	fmt.Printf("Playing: %s\n", mediaFile.FileURL())
@@ -84,15 +101,24 @@ func (dms *DiscordMusicSession) playMediaFile(
 	session, err := dms.playUrlInDiscord(mediaFile.FileURL(), startPlaybackAt)
 
 	if err != nil {
-		return err, true
+		return
 	}
 
 	dms.setCurrentlyPlayingMediaAndSession(mediaFile, session)
 	defer dms.setCurrentlyPlayingMediaAndSession(nil, nil)
 	defer dms.setLastCompletedMedia(mediaFile)
 
+	fileUrlExpiresAt := mediaFile.FileURLExpiresAt()
+	reloadChan := make(chan bool, 1)
+	stopExpirationCheckChan := make(chan bool, 1)
+
+	if fileUrlExpiresAt != nil {
+		defer close(stopExpirationCheckChan)
+		go dms.checkForMediaFileExpiration(fileUrlExpiresAt, stopExpirationCheckChan, reloadChan)
+	}
+
 	select {
-	case err := <-session.done:
+	case err = <-session.done:
 		fmt.Printf("done: %+v\n", err)
 
 		if session.encodingSession != nil {
@@ -102,11 +128,12 @@ func (dms *DiscordMusicSession) playMediaFile(
 		_ = dms.voiceConnection.Speaking(false)
 
 		if err == nil || err == io.EOF {
-			return nil, true
+			err = nil
+			return
 		}
 
 		if !strings.Contains(err.Error(), "Voice connection closed") {
-			return err, true
+			return
 		}
 
 		mediaFileDuration := mediaFile.Duration()
@@ -116,18 +143,17 @@ func (dms *DiscordMusicSession) playMediaFile(
 
 			if mediaDurationLeft.Seconds() < 2 {
 				// No more content to play, done
-				return err, true
+				return
 			}
 		}
 
-		reloadPlaybackStartAt := time.Duration(0)
+		keepPlayingCurrentMedia = true
 
 		if mediaFile.CanJumpToTimeStamp() {
-			reloadPlaybackStartAt = session.streamingSession.PlaybackPosition()
+			keepPlayingCurrentMediaFrom = session.streamingSession.PlaybackPosition()
 		}
 
-		// Retry after voice connection drop
-		return dms.playMediaFile(mediaFile, reloadPlaybackStartAt)
+		return
 	case <-dms.chanLeaveCommand:
 		fmt.Printf("Bot asked to leave while playing\n")
 
@@ -137,7 +163,8 @@ func (dms *DiscordMusicSession) playMediaFile(
 
 		_ = dms.voiceConnection.Speaking(false)
 
-		return nil, false
+		exitWorker = true
+		return
 	case jumpTo := <-dms.chanJumpCommand:
 		if session.encodingSession != nil {
 			session.encodingSession.Cleanup()
@@ -145,14 +172,30 @@ func (dms *DiscordMusicSession) playMediaFile(
 
 		_ = dms.voiceConnection.Speaking(false)
 
-		return dms.playMediaFile(mediaFile, jumpTo)
+		keepPlayingCurrentMedia = true
+		keepPlayingCurrentMediaFrom = jumpTo
+		return
 	case <-dms.chanSkipCommand:
 		if session.encodingSession != nil {
 			session.encodingSession.Cleanup()
 		}
 
 		_ = dms.voiceConnection.Speaking(false)
-		return nil, true
+		return
+	case <-reloadChan:
+		if session.encodingSession != nil {
+			session.encodingSession.Cleanup()
+		}
+
+		_ = dms.voiceConnection.Speaking(false)
+
+		keepPlayingCurrentMedia = true
+
+		if mediaFile.CanJumpToTimeStamp() {
+			keepPlayingCurrentMediaFrom = session.streamingSession.PlaybackPosition()
+		}
+
+		return
 	}
 }
 
@@ -263,4 +306,25 @@ func (dms *DiscordMusicSession) setLastCompletedMedia(media entities.Media) {
 	dms.mutex.Lock()
 	defer dms.mutex.Unlock()
 	dms.lastCompletedMedia = media
+}
+
+func (dms *DiscordMusicSession) checkForMediaFileExpiration(
+	fileUrlExpiresAt *time.Time,
+	stopChan chan bool,
+	reloadChan chan bool,
+) {
+expirationCheckLoop:
+	for {
+		if time.Since(*fileUrlExpiresAt) > -10*time.Second {
+			close(reloadChan)
+			break expirationCheckLoop
+		}
+
+		select {
+		case <-stopChan:
+			break expirationCheckLoop
+		case <-time.After(10 * time.Second):
+			break
+		}
+	}
 }

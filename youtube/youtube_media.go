@@ -20,6 +20,10 @@ func (ytm *YoutubeMedia) FileURL() string {
 	return ytm.StreamURL
 }
 
+func (ytm *YoutubeMedia) FileURLExpiresAt() *time.Time {
+	return ytm.StreamExpiresAt
+}
+
 func (ytm *YoutubeMedia) CanJumpToTimeStamp() bool {
 	return !ytm.IsLiveStream
 }
