@@ -1,4 +1,10 @@
-## Discord streaming music bot
+## Streaming music bot library for Discord
+
+## Dependencies
+### Following commands are required in $PATH
+- [ffmpeg](https://ffmpeg.org/)
+- [ytdlp](https://github.com/yt-dlp/yt-dlp)
+
 
 ## Tests
 ### Generating mocks for tests
@@ -14,16 +20,11 @@ Test suite can be run with ginkgo
 ginkgo -r -p
 ```
 
-### Todo list
-- Search API
-- Support for media from other sources than YT (twitter?)
-- Logger & error handling in discordplayer/voiceworker
-
-#### Done
+#### Features
 - Media change callbacks
 - Context based timeout
 - Reload on FileURL expiration
-- Playlist
+- Playlists
 - Jump command
 - Pause/Resume command
 - Repeat command
@@ -31,7 +32,7 @@ ginkgo -r -p
 - Current playback duration API
 - Reload on discord voice error
 - Reconnects to voice on error
-- Proper queue implementation with limit
+- Media queue with maximum size
 	- Queue API to get current media in queue & size
-	- Current media API
-	- Clear media queue API
+	- Currently playing media API
+	- Clear queue API
