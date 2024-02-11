@@ -20,6 +20,85 @@ Test suite can be run with ginkgo
 ginkgo -r -p
 ```
 
+## Usage
+```golang
+package main
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"os"
+	"os/signal"
+
+	"github.com/bwmarrin/discordgo"
+	"github.com/fakelag/streaming-music-bot/discordplayer"
+	"github.com/fakelag/streaming-music-bot/youtube"
+)
+
+const GuildID = "YOUR_GUILD_ID"
+const VoiceChannelID = "YOUR_VOICE_CHANNEL_ID"
+const TextChannelID = "YOUR_TEXT_CHANNEL_ID"
+const SearchTerm = "YOUR_YT_SEARCH_TERM"
+const DiscordToken = "YOUR_DISCORD_TOKEN"
+
+func main() {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	discord, err := discordgo.New("Bot " + DiscordToken)
+
+	if err != nil {
+		panic(err)
+	}
+
+	discord.Identify.Intents = discordgo.MakeIntent(discordgo.IntentsAllWithoutPrivileged | discordgo.IntentMessageContent)
+	err = discord.Open()
+
+	if err != nil {
+		panic(err)
+	}
+
+	defer discord.Close()
+
+	session, err := discordplayer.NewDiscordMusicSession(ctx, discord, &discordplayer.DiscordMusicSessionOptions{
+		GuildID:           GuildID,
+		VoiceChannelID:    VoiceChannelID,
+		MediaQueueMaxSize: MaxQueueSize,
+	})
+
+	if err != nil {
+		panic(err)
+	}
+
+	youtubeApi = youtube.NewYoutubeAPI()
+	media, err := youtubeApi.GetYoutubeMedia(SearchTerm)
+
+	if err != nil {
+		panic(err)
+	}
+
+	err = session.EnqueueMedia(media)
+
+	if err != nil {
+		if errors.Is(err, discordplayer.ErrorMediaQueueFull) {
+			discord.ChannelMessageSend(TextChannelID, "Queue is full")
+		} else {
+			discord.ChannelMessageSend(TextChannelID, fmt.Sprintf("Failed to enqueue media: %s", err.Error()))
+		}
+	} else {
+		discord.ChannelMessageSend(TextChannelID, fmt.Sprintf("Added %s to the queue", media.Title()))
+	}
+
+	fmt.Println("Running...")
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt)
+	<-c
+	fmt.Println("Exiting...")
+	return
+}
+```
+
 #### Features
 - Media change callbacks
 - Context based timeout
