@@ -98,5 +98,48 @@ var _ = Describe("YT Playlists", func() {
 			Expect(media.FileURL()).To(Equal("streamurl1"))
 			Expect(playList.GetMediaCount()).To(Equal(2))
 		})
+
+		It("Consumes media with shuffle & removes on consumption", func() {
+			playList := NewPlaylistWithMedia()
+
+			playList.SetConsumeOrder(entities.ConsumeOrderShuffle)
+			playList.SetRemoveOnConsume(true)
+
+			Expect(playList.GetRemoveOnConsume()).To(BeTrue())
+			Expect(playList.GetConsumeOrder()).To(Equal(entities.ConsumeOrderShuffle))
+			Expect(playList.GetMediaCount()).To(Equal(2))
+
+			media1, err := playList.ConsumeNextMedia()
+			Expect(err).ToNot(HaveOccurred())
+			Expect(media1).NotTo(BeNil())
+			Expect(playList.GetMediaCount()).To(Equal(1))
+
+			media2, err := playList.ConsumeNextMedia()
+			Expect(err).ToNot(HaveOccurred())
+			Expect(media2).NotTo(BeNil())
+			Expect(playList.GetMediaCount()).To(Equal(0))
+
+			Expect(media1.FileURL()).ToNot(Equal(media2.FileURL()))
+
+			media3, err := playList.ConsumeNextMedia()
+			Expect(err).To(MatchError(entities.ErrorPlaylistEmpty))
+			Expect(media3).To(BeNil())
+		})
+
+		It("Consumes media with shuffle without removal", func() {
+			playList := NewPlaylistWithMedia()
+
+			playList.SetConsumeOrder(entities.ConsumeOrderShuffle)
+			playList.SetRemoveOnConsume(false)
+
+			Expect(playList.GetRemoveOnConsume()).To(BeFalse())
+			Expect(playList.GetConsumeOrder()).To(Equal(entities.ConsumeOrderShuffle))
+			Expect(playList.GetMediaCount()).To(Equal(2))
+
+			media, err := playList.ConsumeNextMedia()
+			Expect(err).ToNot(HaveOccurred())
+			Expect(media).NotTo(BeNil())
+			Expect(playList.GetMediaCount()).To(Equal(2))
+		})
 	})
 })
