@@ -127,11 +127,7 @@ func (dms *DiscordMusicSession) playMediaFile(
 	case err = <-session.done:
 		fmt.Printf("done: %+v\n", err)
 
-		if session.encodingSession != nil {
-			session.encodingSession.Cleanup()
-		}
-
-		_ = dms.voiceConnection.Speaking(false)
+		dms.cleanupEncodingAndVoiceSession(session.encodingSession, dms.voiceConnection)
 
 		if err == nil || err == io.EOF {
 			err = nil
@@ -163,37 +159,21 @@ func (dms *DiscordMusicSession) playMediaFile(
 	case <-dms.chanLeaveCommand:
 		fmt.Printf("Bot asked to leave while playing\n")
 
-		if session.encodingSession != nil {
-			session.encodingSession.Cleanup()
-		}
-
-		_ = dms.voiceConnection.Speaking(false)
+		dms.cleanupEncodingAndVoiceSession(session.encodingSession, dms.voiceConnection)
 
 		exitWorker = true
 		return
 	case jumpTo := <-dms.chanJumpCommand:
-		if session.encodingSession != nil {
-			session.encodingSession.Cleanup()
-		}
-
-		_ = dms.voiceConnection.Speaking(false)
+		dms.cleanupEncodingAndVoiceSession(session.encodingSession, dms.voiceConnection)
 
 		keepPlayingCurrentMedia = true
 		keepPlayingCurrentMediaFrom = jumpTo
 		return
 	case <-dms.chanSkipCommand:
-		if session.encodingSession != nil {
-			session.encodingSession.Cleanup()
-		}
-
-		_ = dms.voiceConnection.Speaking(false)
+		dms.cleanupEncodingAndVoiceSession(session.encodingSession, dms.voiceConnection)
 		return
 	case <-reloadChan:
-		if session.encodingSession != nil {
-			session.encodingSession.Cleanup()
-		}
-
-		_ = dms.voiceConnection.Speaking(false)
+		dms.cleanupEncodingAndVoiceSession(session.encodingSession, dms.voiceConnection)
 
 		keepPlayingCurrentMedia = true
 
@@ -205,11 +185,7 @@ func (dms *DiscordMusicSession) playMediaFile(
 	case <-playMediaCtx.Done():
 		fmt.Printf("Bot context canceled. Exiting...\n")
 
-		if session.encodingSession != nil {
-			session.encodingSession.Cleanup()
-		}
-
-		_ = dms.voiceConnection.Speaking(false)
+		dms.cleanupEncodingAndVoiceSession(session.encodingSession, dms.voiceConnection)
 
 		exitWorker = true
 		return
@@ -329,6 +305,18 @@ func (dms *DiscordMusicSession) setLastCompletedMedia(media entities.Media) {
 	dms.mutex.Lock()
 	defer dms.mutex.Unlock()
 	dms.lastCompletedMedia = media
+}
+
+func (dms *DiscordMusicSession) cleanupEncodingAndVoiceSession(
+	encodingSession *dca.EncodeSession,
+	voiceConnection discordinterface.DiscordVoiceConnection,
+) {
+
+	if encodingSession != nil {
+		encodingSession.Cleanup()
+	}
+
+	_ = voiceConnection.Speaking(false)
 }
 
 func (dms *DiscordMusicSession) checkForMediaFileExpiration(
