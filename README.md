@@ -11,10 +11,10 @@ mockgen -source=discordplayer/interfaces/dcastreamingsessioninterface.go -destin
 ### Todo list
 - Search API
 - Support for media from other sources than YT (twitter?)
-- Channel interface when media changes
 - Logger & error handling in discordplayer/voiceworker
 
 #### Done
+- Media change callbacks
 - Context based timeout
 - Reload on FileURL expiration
 - Playlist

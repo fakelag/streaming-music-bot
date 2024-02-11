@@ -34,19 +34,24 @@ workerloop:
 		if mediaFile != nil {
 			keepPlayingCurrentMedia := true
 			keepPlayingCurrentMediaFrom := time.Duration(0)
+			isReload := false
 
 			for keepPlayingCurrentMedia {
 				var err error
 				var exitWorker bool
 
+				dms.invokeNextMediaCallbacks(mediaFile, isReload)
 				err, exitWorker, keepPlayingCurrentMedia, keepPlayingCurrentMediaFrom = dms.playMediaFile(
 					ctx,
 					mediaFile,
 					keepPlayingCurrentMediaFrom,
 				)
 
+				isReload = true
+
 				if err != nil {
 					fmt.Printf("Error occurred while playing: %s\n", err.Error())
+					dms.invokeErrorCallbacks(mediaFile, err)
 				}
 
 				if exitWorker {
@@ -336,5 +341,23 @@ func (dms *DiscordMusicSession) checkForMediaFileExpiration(
 		case <-time.After(10 * time.Second):
 			break
 		}
+	}
+}
+
+func (dms *DiscordMusicSession) invokeNextMediaCallbacks(mediaFile entities.Media, isReload bool) {
+	dms.mutex.RLock()
+	defer dms.mutex.RUnlock()
+
+	for _, cb := range dms.nextMediaCallbacks {
+		go cb(mediaFile, isReload)
+	}
+}
+
+func (dms *DiscordMusicSession) invokeErrorCallbacks(mediaFile entities.Media, err error) {
+	dms.mutex.RLock()
+	defer dms.mutex.RUnlock()
+
+	for _, cb := range dms.errorCallbacks {
+		go cb(mediaFile, err)
 	}
 }

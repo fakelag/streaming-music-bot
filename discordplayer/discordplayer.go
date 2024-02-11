@@ -23,6 +23,9 @@ var (
 	ErrorInvalidArgument         = errors.New("invalid argument")
 )
 
+type NextMediaCallback = func(mediaFile entities.Media, isReload bool)
+type ErrorCallback = func(mediaFile entities.Media, err error)
+
 type DiscordMusicSession struct {
 	mutex sync.RWMutex
 
@@ -42,6 +45,9 @@ type DiscordMusicSession struct {
 	mediaQueue            []entities.Media
 	mediaQueueMaxSize     int
 	currentPlaylist       entities.Playlist
+
+	nextMediaCallbacks []NextMediaCallback
+	errorCallbacks     []ErrorCallback
 
 	workerActive      bool
 	chanLeaveCommand  chan bool
@@ -82,14 +88,16 @@ func NewDiscordMusicSessionEx(
 	}
 
 	dms := &DiscordMusicSession{
-		guildID:           options.GuildID,
-		voiceChannelID:    options.VoiceChannelID,
-		voiceConnection:   nil,
-		discordSession:    discord,
-		dca:               dca,
-		ctx:               ctx,
-		mediaQueue:        make([]entities.Media, 0),
-		mediaQueueMaxSize: options.MediaQueueMaxSize,
+		guildID:            options.GuildID,
+		voiceChannelID:     options.VoiceChannelID,
+		voiceConnection:    nil,
+		discordSession:     discord,
+		dca:                dca,
+		ctx:                ctx,
+		mediaQueue:         make([]entities.Media, 0),
+		mediaQueueMaxSize:  options.MediaQueueMaxSize,
+		nextMediaCallbacks: make([]NextMediaCallback, 0),
+		errorCallbacks:     make([]ErrorCallback, 0),
 	}
 
 	return dms, nil
@@ -257,6 +265,20 @@ func (dms *DiscordMusicSession) CurrentPlaybackPosition() time.Duration {
 	}
 
 	return dms.currentMediaSession.streamingSession.PlaybackPosition()
+}
+
+func (dms *DiscordMusicSession) AddNextMediaCallback(cb NextMediaCallback) {
+	dms.mutex.Lock()
+	defer dms.mutex.Unlock()
+
+	dms.nextMediaCallbacks = append(dms.nextMediaCallbacks, cb)
+}
+
+func (dms *DiscordMusicSession) AddErrorCallback(cb ErrorCallback) {
+	dms.mutex.Lock()
+	defer dms.mutex.Unlock()
+
+	dms.errorCallbacks = append(dms.errorCallbacks, cb)
 }
 
 func (dms *DiscordMusicSession) sendCommand(command chan bool) error {
