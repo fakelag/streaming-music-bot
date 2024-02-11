@@ -7,7 +7,6 @@ import (
 	"math/rand"
 	"os/exec"
 	"regexp"
-	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -254,10 +253,6 @@ func (yt *Youtube) GetYoutubePlaylist(playlistIdOrUrl string) (*YoutubePlaylist,
 }
 
 func getYtDlpPath() (string, error) {
-	if runtime.GOOS == "windows" {
-		return "./yt-dlp.exe", nil
-	}
-
 	path, err := exec.LookPath("yt-dlp")
 
 	if err != nil {
