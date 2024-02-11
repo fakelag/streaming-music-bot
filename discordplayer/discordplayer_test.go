@@ -934,4 +934,86 @@ var _ = Describe("Discord Player", func() {
 			}
 		})
 	})
+
+	When("Adding custom callbacks to DiscordMusicSession", func() {
+		It("Invokes next media callbacks as expected", func() {
+			ctrl := gomock.NewController(GinkgoT())
+
+			currentMediaDone := make(chan error)
+			mockDcaStreamingSession := NewMockDcaStreamingSession(ctrl)
+			playerContext := JoinMockVoiceChannelAndPlayEx(context.TODO(), ctrl, currentMediaDone, false, mockDcaStreamingSession)
+
+			isSecondCall := false
+			playerContext.dms.AddNextMediaCallback(func(mediaFile entities.Media, isReload bool) {
+				defer GinkgoRecover()
+				Expect(mediaFile).NotTo(BeNil())
+				Expect(mediaFile.FileURL()).To(Equal(playerContext.mockMedia.FileURL()))
+				Expect(isReload).To(Equal(isSecondCall))
+
+				if isReload {
+					Expect(playerContext.dms.Leave()).To(Succeed())
+				}
+
+				isSecondCall = true
+			})
+
+			c := make(chan struct{})
+			mockDcaStreamingSession.EXPECT().PlaybackPosition().Return(1 * time.Second).AnyTimes()
+			playerContext.mockDca.EXPECT().EncodeFile(playerContext.mockMedia.FileURL(), gomock.Any()).Return(nil, nil).AnyTimes()
+			playerContext.mockVoiceConnection.EXPECT().IsReady().Return(true).AnyTimes()
+			playerContext.mockVoiceConnection.EXPECT().Speaking(gomock.Any()).AnyTimes()
+			playerContext.mockVoiceConnection.EXPECT().Disconnect().Do(func() {
+				close(c)
+			})
+
+			playerContext.dms.EnqueueMedia(playerContext.mockMedia)
+
+			// Error to force a reload
+			currentMediaDone <- errors.New("Voice connection closed")
+
+			select {
+			case <-c:
+				return
+			case <-time.After(20 * time.Second):
+				Fail("Voice worker timed out")
+			}
+		})
+
+		It("Invokes error callbacks as expected", func() {
+			ctrl := gomock.NewController(GinkgoT())
+			mediaError := errors.New("ffmpeg exited with status code 1")
+
+			currentMediaDone := make(chan error)
+			mockDcaStreamingSession := NewMockDcaStreamingSession(ctrl)
+			playerContext := JoinMockVoiceChannelAndPlayEx(context.TODO(), ctrl, currentMediaDone, false, mockDcaStreamingSession)
+
+			playerContext.dms.AddErrorCallback(func(mediaFile entities.Media, err error) {
+				defer GinkgoRecover()
+				Expect(mediaFile).NotTo(BeNil())
+				Expect(mediaFile.FileURL()).To(Equal(playerContext.mockMedia.FileURL()))
+				Expect(err).To(MatchError(mediaError))
+				Expect(playerContext.dms.Leave()).To(Succeed())
+			})
+
+			c := make(chan struct{})
+			mockDcaStreamingSession.EXPECT().PlaybackPosition().Return(1 * time.Second).AnyTimes()
+			playerContext.mockDca.EXPECT().EncodeFile(playerContext.mockMedia.FileURL(), gomock.Any()).Return(nil, nil).AnyTimes()
+			playerContext.mockVoiceConnection.EXPECT().IsReady().Return(true).AnyTimes()
+			playerContext.mockVoiceConnection.EXPECT().Speaking(gomock.Any()).AnyTimes()
+			playerContext.mockVoiceConnection.EXPECT().Disconnect().Do(func() {
+				close(c)
+			})
+
+			playerContext.dms.EnqueueMedia(playerContext.mockMedia)
+
+			currentMediaDone <- mediaError
+
+			select {
+			case <-c:
+				return
+			case <-time.After(20 * time.Second):
+				Fail("Voice worker timed out")
+			}
+		})
+	})
 })
