@@ -46,6 +46,10 @@ func (mm *MockMedia) FileURLExpiresAt() *time.Time {
 	return mm.FileURLExpireAt
 }
 
+func (mm *MockMedia) Thumbnail() string {
+	return ""
+}
+
 type JoinVoiceAndPlayContext struct {
 	mockVoiceConnection *MockDiscordVoiceConnection
 	mockDiscordSession  *MockDiscordSession

@@ -10,6 +10,7 @@ type YoutubeMedia struct {
 	ID              string
 	VideoTitle      string
 	IsLiveStream    bool
+	VideoThumbnail  string
 	VideoDuration   time.Duration
 	StreamURL       string
 	StreamExpiresAt *time.Time
@@ -31,6 +32,10 @@ func (ytm *YoutubeMedia) FileURLExpiresAt() *time.Time {
 
 func (ytm *YoutubeMedia) CanJumpToTimeStamp() bool {
 	return !ytm.IsLiveStream
+}
+
+func (mm *YoutubeMedia) Thumbnail() string {
+	return ""
 }
 
 func (ytm *YoutubeMedia) Duration() *time.Duration {

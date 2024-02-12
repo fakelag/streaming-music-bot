@@ -13,6 +13,7 @@ type Media interface {
 	EnsureLoaded() error
 
 	Title() string
+	Thumbnail() string
 	CanJumpToTimeStamp() bool
 	Duration() *time.Duration
 }
