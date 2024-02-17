@@ -16,6 +16,11 @@ import (
 	"github.com/fakelag/streaming-music-bot/entities"
 )
 
+var (
+	gID = "xxx-guild-id"
+	cID = "xxx-channel-id"
+)
+
 type MockMedia struct {
 	MockMediaTitle   string
 	MockMediaFileURL string
@@ -140,9 +145,6 @@ func JoinMockVoiceChannelAndPlayEx(
 	mockDca := NewMockDiscordAudio(ctrl)
 	mockDiscordSession := NewMockDiscordSession(ctrl)
 	mockVoiceConnection := NewMockDiscordVoiceConnection(ctrl)
-
-	gID := "xxx-guild-id"
-	cID := "xxx-channel-id"
 	mockMedia := NewMockMedia("Mock Media", "mockurl")
 
 	gomock.InOrder(
@@ -204,6 +206,9 @@ var _ = Describe("Discord Player", func() {
 
 		currentMediaDone := make(chan error)
 		playerContext := JoinMockVoiceChannelAndPlay(ctrl, currentMediaDone)
+
+		Expect(playerContext.dms.GetGuildID()).To(Equal(gID))
+		Expect(playerContext.dms.GetVoiceChannelID()).To(Equal(cID))
 
 		c := make(chan struct{})
 

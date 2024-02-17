@@ -317,3 +317,11 @@ func (dms *DiscordMusicSession) startVoiceWorkerNoLock(ctx context.Context) {
 	go dms.voiceWorker(ctx)
 	dms.workerActive = true
 }
+
+func (dms *DiscordMusicSession) GetVoiceChannelID() string {
+	return dms.voiceChannelID
+}
+
+func (dms *DiscordMusicSession) GetGuildID() string {
+	return dms.guildID
+}
