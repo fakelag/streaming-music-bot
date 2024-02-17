@@ -10,8 +10,8 @@ import (
 type YoutubePlaylist struct {
 	sync.RWMutex
 
-	ID    string
-	Title string
+	ID            string
+	PlaylistTitle string
 
 	removeMediaOnConsume bool
 	consumeOrder         entities.PlaylistConsumeOrder
@@ -20,6 +20,10 @@ type YoutubePlaylist struct {
 
 	// mutex needs to be write-locked for rng
 	rng *rand.Rand
+}
+
+func (ypl *YoutubePlaylist) Title() string {
+	return ypl.PlaylistTitle
 }
 
 func (ypl *YoutubePlaylist) ConsumeNextMedia() (entities.Media, error) {

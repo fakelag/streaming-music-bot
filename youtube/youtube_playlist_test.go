@@ -36,7 +36,7 @@ func NewPlaylistWithMedia() *YoutubePlaylist {
 
 	return &YoutubePlaylist{
 		ID:                   "3",
-		Title:                "Mock Playlist",
+		PlaylistTitle:        "Mock Playlist",
 		rng:                  rng,
 		removeMediaOnConsume: true,
 		consumeOrder:         entities.ConsumeOrderFromStart,

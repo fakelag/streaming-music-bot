@@ -15,6 +15,7 @@ var (
 )
 
 type Playlist interface {
+	Title() string
 	ConsumeNextMedia() (Media, error)
 	SetConsumeOrder(PlaylistConsumeOrder) error
 	SetRemoveOnConsume(removeOnConsume bool)

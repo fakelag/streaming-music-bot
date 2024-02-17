@@ -171,7 +171,7 @@ var _ = Describe("YT Download", func() {
 
 			Expect(err).To(BeNil())
 			Expect(playList.ID).To(Equal("1234"))
-			Expect(playList.Title).To(Equal("Playlist Title"))
+			Expect(playList.Title()).To(Equal("Playlist Title"))
 			Expect(playList.GetMediaCount()).To(Equal(2))
 
 			media0, err := playList.ConsumeNextMedia()

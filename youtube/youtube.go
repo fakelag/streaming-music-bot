@@ -231,7 +231,7 @@ func (yt *Youtube) GetYoutubePlaylist(playlistIdOrUrl string) (*YoutubePlaylist,
 
 	playList := &YoutubePlaylist{
 		ID:                   ytDlpPlaylist.ID,
-		Title:                ytDlpPlaylist.Title,
+		PlaylistTitle:        ytDlpPlaylist.Title,
 		removeMediaOnConsume: true,
 		rng:                  rng,
 		consumeOrder:         entities.ConsumeOrderFromStart,
