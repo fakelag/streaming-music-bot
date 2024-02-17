@@ -233,7 +233,7 @@ func (yt *Youtube) GetYoutubePlaylist(playlistIdOrUrl string) (*YoutubePlaylist,
 	rngSource := rand.NewSource(time.Now().Unix())
 	rng := rand.New(rngSource)
 
-	playList := NewYoutubePlaylist(ytDlpPlaylist.ID, ytDlpPlaylist.Title, rng, len(ytDlpPlaylist.Entries))
+	playList := NewYoutubePlaylist(ytDlpPlaylist.ID, ytDlpPlaylist.Title, ytDlpPlaylist.PlaylistURL, rng, len(ytDlpPlaylist.Entries))
 
 	for index, video := range ytDlpPlaylist.Entries {
 		thumbnailUrl := ""
@@ -264,6 +264,7 @@ func (yt *Youtube) GetYoutubePlaylist(playlistIdOrUrl string) (*YoutubePlaylist,
 func NewYoutubePlaylist(
 	playlistID string,
 	playlistTitle string,
+	playlistLink string,
 	rng *rand.Rand,
 	numEntries int,
 	entries ...*YoutubeMedia,
@@ -271,6 +272,7 @@ func NewYoutubePlaylist(
 	pl := &YoutubePlaylist{
 		ID:                   playlistID,
 		PlaylistTitle:        playlistTitle,
+		PlaylistLink:         playlistLink,
 		rng:                  rng,
 		removeMediaOnConsume: true,
 		consumeOrder:         entities.ConsumeOrderFromStart,

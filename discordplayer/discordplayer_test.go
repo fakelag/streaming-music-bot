@@ -84,6 +84,10 @@ func (mp *MockPlaylist) Title() string {
 	return "Mock Playlist"
 }
 
+func (mp *MockPlaylist) Link() string {
+	return "link123"
+}
+
 func (mp *MockPlaylist) AddMedia(mm *MockMedia) {
 	mp.Lock()
 	defer mp.Unlock()

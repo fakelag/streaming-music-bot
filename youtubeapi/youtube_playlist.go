@@ -13,6 +13,7 @@ type YoutubePlaylist struct {
 
 	ID            string
 	PlaylistTitle string
+	PlaylistLink  string
 
 	removeMediaOnConsume bool
 	consumeOrder         entities.PlaylistConsumeOrder
@@ -25,6 +26,10 @@ type YoutubePlaylist struct {
 
 func (ypl *YoutubePlaylist) Title() string {
 	return ypl.PlaylistTitle
+}
+
+func (ypl *YoutubePlaylist) Link() string {
+	return ypl.PlaylistLink
 }
 
 func (ypl *YoutubePlaylist) ConsumeNextMedia() (entities.Media, error) {
