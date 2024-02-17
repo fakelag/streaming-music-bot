@@ -105,8 +105,9 @@ var _ = Describe("YT Download", func() {
 			media, err := yt.GetYoutubeMedia("foo")
 			Expect(err).To(BeNil())
 			Expect(media.ID).To(Equal("123"))
-			Expect(media.VideoTitle).To(Equal("Mock Title"))
-			Expect(media.StreamURL).To(Equal("url123"))
+			Expect(media.Title()).To(Equal("Mock Title"))
+			Expect(media.FileURL()).To(Equal("url123"))
+			Expect(media.Thumbnail()).To(Equal("foo"))
 		})
 
 		It("Parses stream expiration url correctly", func() {

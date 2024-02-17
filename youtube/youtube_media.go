@@ -34,8 +34,8 @@ func (ytm *YoutubeMedia) CanJumpToTimeStamp() bool {
 	return !ytm.IsLiveStream
 }
 
-func (mm *YoutubeMedia) Thumbnail() string {
-	return ""
+func (ytm *YoutubeMedia) Thumbnail() string {
+	return ytm.VideoThumbnail
 }
 
 func (ytm *YoutubeMedia) Duration() *time.Duration {
