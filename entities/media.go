@@ -13,6 +13,7 @@ type Media interface {
 	EnsureLoaded() error
 
 	Title() string
+	Link() string
 	Thumbnail() string
 	CanJumpToTimeStamp() bool
 	IsLiveStream() bool

@@ -153,9 +153,9 @@ func (yt *Youtube) GetYoutubeMedia(videoIdOrSearchTerm string) (*YoutubeMedia, e
 			VideoTitle:        ytDlpVideo.Title,
 			VideoThumbnail:    ytDlpVideo.Thumbnail,
 			VideoIsLiveStream: ytDlpVideo.IsLiveStream,
-			StreamURL:         videoStreamURL,
 			VideoDuration:     time.Duration(ytDlpVideo.Duration) * time.Second,
-			Link:              "https://www.youtube.com/watch?v=" + ytDlpVideo.ID,
+			VideoLink:         "https://www.youtube.com/watch?v=" + ytDlpVideo.ID,
+			StreamURL:         videoStreamURL,
 			ytAPI:             yt,
 		}
 
@@ -251,9 +251,9 @@ func (yt *Youtube) GetYoutubePlaylist(playlistIdOrUrl string) (*YoutubePlaylist,
 			VideoTitle:        video.Title,
 			VideoThumbnail:    thumbnailUrl,
 			VideoIsLiveStream: video.LiveStatus == "is_live",
-			StreamURL:         "",
 			VideoDuration:     time.Duration(video.Duration) * time.Second,
-			Link:              "https://www.youtube.com/watch?v=" + video.ID,
+			VideoLink:         "https://www.youtube.com/watch?v=" + video.ID,
+			StreamURL:         "",
 			ytAPI:             yt,
 		}
 	}

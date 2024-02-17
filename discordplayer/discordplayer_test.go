@@ -51,6 +51,10 @@ func (mm *MockMedia) FileURL() string {
 	return mm.MockMediaFileURL
 }
 
+func (mm *MockMedia) Link() string {
+	return "mockmedialink"
+}
+
 func (mm *MockMedia) CanJumpToTimeStamp() bool {
 	return !mm.DisableJumpToTS
 }

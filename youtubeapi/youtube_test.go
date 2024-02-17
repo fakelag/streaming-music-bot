@@ -189,16 +189,17 @@ var _ = Describe("YT Download", func() {
 			Expect(ytMedia0.ID).Should(Equal("0"))
 			Expect(ytMedia0.Title()).Should(Equal("foobar"))
 			Expect(ytMedia0.IsLiveStream()).Should(BeFalse())
-			Expect(ytMedia0.VideoDuration).Should(Equal(60 * time.Second))
-			Expect(ytMedia0.StreamURL).Should(Equal(""))
-			Expect(ytMedia0.Link).Should(Equal("https://www.youtube.com/watch?v=0"))
+			Expect(ytMedia0.Link()).Should(Equal("https://www.youtube.com/watch?v=0"))
+			Expect(ytMedia0.Duration()).ShouldNot(BeNil())
+			Expect(*ytMedia0.Duration()).Should(Equal(60 * time.Second))
+			Expect(ytMedia0.FileURL()).Should(Equal(""))
 
 			Expect(ytMedia1.ID).Should(Equal("1"))
 			Expect(ytMedia1.Title()).Should(Equal("foobar 2 live"))
 			Expect(ytMedia1.IsLiveStream()).Should(BeTrue())
-			Expect(ytMedia1.VideoDuration).Should(Equal(0 * time.Second))
-			Expect(ytMedia1.StreamURL).Should(Equal(""))
-			Expect(ytMedia1.Link).Should(Equal("https://www.youtube.com/watch?v=1"))
+			Expect(ytMedia1.Link()).Should(Equal("https://www.youtube.com/watch?v=1"))
+			Expect(ytMedia1.Duration()).Should(BeNil())
+			Expect(ytMedia1.FileURL()).Should(Equal(""))
 		})
 
 		It("Fails with a sensible error if the download fails due to invalid json", func() {
