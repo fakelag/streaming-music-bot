@@ -17,16 +17,33 @@ import (
 )
 
 type MockMedia struct {
-	DisableJumpToTS bool
-	FileURLExpireAt *time.Time
+	MockMediaTitle   string
+	MockMediaFileURL string
+	DisableJumpToTS  bool
+	FileURLExpireAt  *time.Time
+}
+
+type MockPlaylist struct {
+	sync.RWMutex
+	MediaList []*MockMedia
+}
+
+func NewMockMedia(title string, fileURL string) *MockMedia {
+	mm := &MockMedia{MockMediaTitle: title, MockMediaFileURL: fileURL}
+	return mm
+}
+
+func NewMockPlaylist() *MockPlaylist {
+	mp := &MockPlaylist{}
+	return mp
 }
 
 func (mm *MockMedia) Title() string {
-	return "Mock Media"
+	return mm.MockMediaTitle
 }
 
 func (mm *MockMedia) FileURL() string {
-	return "mockurl"
+	return mm.MockMediaFileURL
 }
 
 func (mm *MockMedia) CanJumpToTimeStamp() bool {
@@ -48,6 +65,59 @@ func (mm *MockMedia) FileURLExpiresAt() *time.Time {
 
 func (mm *MockMedia) Thumbnail() string {
 	return ""
+}
+
+func (mp *MockPlaylist) Title() string {
+	return "Mock Playlist"
+}
+
+func (mp *MockPlaylist) AddMedia(mm *MockMedia) {
+	mp.Lock()
+	defer mp.Unlock()
+	mp.MediaList = append(mp.MediaList, mm)
+}
+
+func (mp *MockPlaylist) ConsumeNextMedia() (entities.Media, error) {
+	mp.Lock()
+	defer mp.Unlock()
+
+	if len(mp.MediaList) == 0 {
+		return nil, entities.ErrorPlaylistEmpty
+	}
+
+	firstMedia := mp.MediaList[0]
+	mediaListCopy := make([]*MockMedia, len(mp.MediaList)-1)
+	copy(mediaListCopy, mp.MediaList[1:])
+	mp.MediaList = mediaListCopy
+	return firstMedia, nil
+}
+
+func (mp *MockPlaylist) SetConsumeOrder(order entities.PlaylistConsumeOrder) error {
+	Fail("Not implemented")
+	return nil
+}
+
+func (mp *MockPlaylist) SetRemoveOnConsume(removeOnConsume bool) {
+	Fail("Not implemented")
+}
+
+func (mp *MockPlaylist) GetAvailableConsumeOrders() []entities.PlaylistConsumeOrder {
+	Fail("Not implemented")
+	return nil
+}
+
+func (mp *MockPlaylist) GetMediaCount() int {
+	mp.RLock()
+	defer mp.RUnlock()
+	return len(mp.MediaList)
+}
+
+func (mp *MockPlaylist) GetRemoveOnConsume() bool {
+	return false
+}
+
+func (mp *MockPlaylist) GetConsumeOrder() entities.PlaylistConsumeOrder {
+	return entities.ConsumeOrderFromStart
 }
 
 type JoinVoiceAndPlayContext struct {
@@ -73,7 +143,7 @@ func JoinMockVoiceChannelAndPlayEx(
 
 	gID := "xxx-guild-id"
 	cID := "xxx-channel-id"
-	mockMedia := &MockMedia{}
+	mockMedia := NewMockMedia("Mock Media", "mockurl")
 
 	gomock.InOrder(
 		mockDiscordSession.EXPECT().ChannelVoiceJoin(gID, cID, false, false).Return(mockVoiceConnection, nil),
@@ -616,6 +686,177 @@ var _ = Describe("Discord Player", func() {
 					WithTimeout(2 * time.Second).
 					WithPolling(50 * time.Millisecond).
 					Should(BeNil())
+				return
+			case <-time.After(20 * time.Second):
+				Fail("Voice worker timed out")
+			}
+		})
+	})
+
+	When("Playing from a playlist", func() {
+		It("Starts playing media from a playlist and gets the current playlist through the API", func() {
+			ctrl := gomock.NewController(GinkgoT())
+
+			currentMediaDone := make(chan error)
+			mockDcaStreamingSession := NewMockDcaStreamingSession(ctrl)
+			playerContext := JoinMockVoiceChannelAndPlayEx(context.Background(), ctrl, currentMediaDone, false, mockDcaStreamingSession)
+
+			c := make(chan struct{})
+
+			playerContext.mockVoiceConnection.EXPECT().IsReady().Return(true).AnyTimes()
+			playerContext.mockVoiceConnection.EXPECT().Speaking(gomock.Any()).AnyTimes()
+
+			secondMediaTitle := "Media 2"
+			secondMediaURL := "media2url"
+
+			gomock.InOrder(
+				playerContext.mockDca.EXPECT().EncodeFile(secondMediaURL, gomock.Any()).Return(nil, nil),
+				playerContext.mockVoiceConnection.EXPECT().Disconnect().Do(func() {
+					close(c)
+				}),
+			)
+
+			mockPlaylist := NewMockPlaylist()
+			mockPlaylist.AddMedia(playerContext.mockMedia)
+			mockPlaylist.AddMedia(NewMockMedia(secondMediaTitle, secondMediaURL))
+
+			Expect(playerContext.dms.GetCurrentPlaylist()).To(BeNil())
+			playerContext.dms.StartPlaylist(mockPlaylist)
+			Expect(playerContext.dms.GetCurrentPlaylist()).NotTo(BeNil())
+			Expect(playerContext.dms.GetCurrentPlaylist().Title()).Should(Equal(mockPlaylist.Title()))
+
+			Eventually(func() string {
+				media := playerContext.dms.GetCurrentlyPlayingMedia()
+
+				if media == nil {
+					return ""
+				}
+
+				return media.Title()
+			}).WithTimeout(2 * time.Second).WithPolling(50 * time.Millisecond).Should(Equal(playerContext.mockMedia.Title()))
+
+			// Done first media
+			currentMediaDone <- nil
+
+			Eventually(func() string {
+				media := playerContext.dms.GetCurrentlyPlayingMedia()
+
+				if media == nil {
+					return ""
+				}
+
+				return media.Title()
+			}).WithTimeout(2 * time.Second).WithPolling(50 * time.Millisecond).Should(Equal(secondMediaTitle))
+
+			Expect(playerContext.dms.GetCurrentPlaylist()).NotTo(BeNil())
+			Expect(playerContext.dms.GetCurrentPlaylist().Title()).Should(Equal(mockPlaylist.Title()))
+
+			// Done second media
+			currentMediaDone <- nil
+
+			// Playlist should be automatically cleared
+			Eventually(func() entities.Playlist {
+				return playerContext.dms.GetCurrentPlaylist()
+			}).WithTimeout(2 * time.Second).WithPolling(50 * time.Millisecond).Should(BeNil())
+
+			Expect(playerContext.dms.Leave()).Should(Succeed())
+
+			select {
+			case <-c:
+				return
+			case <-time.After(20 * time.Second):
+				Fail("Voice worker timed out")
+			}
+		})
+
+		It("Starts playing media from a playlist but plays primarily from media queue", func() {
+			ctrl := gomock.NewController(GinkgoT())
+
+			currentMediaDone := make(chan error)
+			mockDcaStreamingSession := NewMockDcaStreamingSession(ctrl)
+			playerContext := JoinMockVoiceChannelAndPlayEx(context.Background(), ctrl, currentMediaDone, false, mockDcaStreamingSession)
+
+			c := make(chan struct{})
+
+			playerContext.mockVoiceConnection.EXPECT().IsReady().Return(true).AnyTimes()
+			playerContext.mockVoiceConnection.EXPECT().Speaking(gomock.Any()).AnyTimes()
+
+			queueMediaTitle := "Queue Media"
+			queueMediaURL := "queuemediaurl"
+
+			thirdMediaTitle := "Media 2"
+			thirdMediaURL := "media2url"
+
+			gomock.InOrder(
+				playerContext.mockDca.EXPECT().EncodeFile(queueMediaURL, gomock.Any()).Return(nil, nil),
+				playerContext.mockDca.EXPECT().EncodeFile(thirdMediaURL, gomock.Any()).Return(nil, nil),
+				playerContext.mockVoiceConnection.EXPECT().Disconnect().Do(func() {
+					close(c)
+				}),
+			)
+
+			mockPlaylist := NewMockPlaylist()
+			mockPlaylist.AddMedia(playerContext.mockMedia)
+			mockPlaylist.AddMedia(NewMockMedia(thirdMediaTitle, thirdMediaURL))
+			playerContext.dms.StartPlaylist(mockPlaylist)
+
+			Eventually(func() string {
+				media := playerContext.dms.GetCurrentlyPlayingMedia()
+
+				if media == nil {
+					return ""
+				}
+
+				return media.Title()
+			}).WithTimeout(2 * time.Second).WithPolling(50 * time.Millisecond).Should(Equal(playerContext.mockMedia.Title()))
+
+			queueMedia := NewMockMedia(queueMediaTitle, queueMediaURL)
+			Expect(playerContext.dms.EnqueueMedia(queueMedia)).To(Succeed())
+
+			// Done first media
+			currentMediaDone <- nil
+
+			Eventually(func() string {
+				media := playerContext.dms.GetCurrentlyPlayingMedia()
+
+				if media == nil {
+					return ""
+				}
+
+				return media.Title()
+			}).WithTimeout(2 * time.Second).WithPolling(50 * time.Millisecond).Should(Equal(queueMediaTitle))
+
+			Expect(playerContext.dms.GetCurrentPlaylist()).NotTo(BeNil())
+			Expect(playerContext.dms.GetCurrentPlaylist().Title()).Should(Equal(mockPlaylist.Title()))
+
+			// Done queue'd media
+			currentMediaDone <- nil
+
+			// Continue playing from playlist
+			Eventually(func() string {
+				media := playerContext.dms.GetCurrentlyPlayingMedia()
+
+				if media == nil {
+					return ""
+				}
+
+				return media.Title()
+			}).WithTimeout(2 * time.Second).WithPolling(50 * time.Millisecond).Should(Equal(thirdMediaTitle))
+
+			Eventually(func() entities.Playlist {
+				return playerContext.dms.GetCurrentPlaylist()
+			}).WithTimeout(2 * time.Second).WithPolling(50 * time.Millisecond).ShouldNot(BeNil())
+
+			playerContext.dms.ClearPlaylist()
+
+			Eventually(func() entities.Playlist {
+				return playerContext.dms.GetCurrentPlaylist()
+			}).WithTimeout(2 * time.Second).WithPolling(50 * time.Millisecond).Should(BeNil())
+
+			Expect(playerContext.dms.Leave()).Should(Succeed())
+
+			select {
+			case <-c:
 				return
 			case <-time.After(20 * time.Second):
 				Fail("Voice worker timed out")
