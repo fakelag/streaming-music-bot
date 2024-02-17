@@ -7,15 +7,15 @@ import (
 )
 
 type YoutubeMedia struct {
-	ID              string
-	VideoTitle      string
-	IsLiveStream    bool
-	VideoThumbnail  string
-	VideoDuration   time.Duration
-	StreamURL       string
-	StreamExpiresAt *time.Time
-	Link            string
-	ytAPI           *Youtube
+	ID                string
+	VideoTitle        string
+	VideoIsLiveStream bool
+	VideoThumbnail    string
+	VideoDuration     time.Duration
+	StreamURL         string
+	StreamExpiresAt   *time.Time
+	Link              string
+	ytAPI             *Youtube
 }
 
 func (ytm *YoutubeMedia) Title() string {
@@ -31,7 +31,7 @@ func (ytm *YoutubeMedia) FileURLExpiresAt() *time.Time {
 }
 
 func (ytm *YoutubeMedia) CanJumpToTimeStamp() bool {
-	return !ytm.IsLiveStream
+	return !ytm.VideoIsLiveStream
 }
 
 func (ytm *YoutubeMedia) Thumbnail() string {
@@ -39,7 +39,7 @@ func (ytm *YoutubeMedia) Thumbnail() string {
 }
 
 func (ytm *YoutubeMedia) Duration() *time.Duration {
-	if ytm.IsLiveStream {
+	if ytm.VideoIsLiveStream {
 		return nil
 	}
 	return &ytm.VideoDuration
@@ -58,6 +58,10 @@ func (ytm *YoutubeMedia) EnsureLoaded() error {
 	}
 
 	return nil
+}
+
+func (ytm *YoutubeMedia) IsLiveStream() bool {
+	return ytm.VideoIsLiveStream
 }
 
 // Verify implements entities.Media

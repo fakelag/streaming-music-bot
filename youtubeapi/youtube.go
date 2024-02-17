@@ -149,14 +149,14 @@ func (yt *Youtube) GetYoutubeMedia(videoIdOrSearchTerm string) (*YoutubeMedia, e
 		}
 
 		media := &YoutubeMedia{
-			ID:             ytDlpVideo.ID,
-			VideoTitle:     ytDlpVideo.Title,
-			VideoThumbnail: ytDlpVideo.Thumbnail,
-			IsLiveStream:   ytDlpVideo.IsLiveStream,
-			StreamURL:      videoStreamURL,
-			VideoDuration:  time.Duration(ytDlpVideo.Duration) * time.Second,
-			Link:           "https://www.youtube.com/watch?v=" + ytDlpVideo.ID,
-			ytAPI:          yt,
+			ID:                ytDlpVideo.ID,
+			VideoTitle:        ytDlpVideo.Title,
+			VideoThumbnail:    ytDlpVideo.Thumbnail,
+			VideoIsLiveStream: ytDlpVideo.IsLiveStream,
+			StreamURL:         videoStreamURL,
+			VideoDuration:     time.Duration(ytDlpVideo.Duration) * time.Second,
+			Link:              "https://www.youtube.com/watch?v=" + ytDlpVideo.ID,
+			ytAPI:             yt,
 		}
 
 		streamExpireUnixSecondsMatch := yt.streamUrlExpireRegex.FindStringSubmatch(videoStreamURL)
@@ -247,14 +247,14 @@ func (yt *Youtube) GetYoutubePlaylist(playlistIdOrUrl string) (*YoutubePlaylist,
 		}
 
 		playList.mediaList[index] = &YoutubeMedia{
-			ID:             video.ID,
-			VideoTitle:     video.Title,
-			VideoThumbnail: thumbnailUrl,
-			IsLiveStream:   video.LiveStatus == "is_live",
-			StreamURL:      "",
-			VideoDuration:  time.Duration(video.Duration) * time.Second,
-			Link:           "https://www.youtube.com/watch?v=" + video.ID,
-			ytAPI:          yt,
+			ID:                video.ID,
+			VideoTitle:        video.Title,
+			VideoThumbnail:    thumbnailUrl,
+			VideoIsLiveStream: video.LiveStatus == "is_live",
+			StreamURL:         "",
+			VideoDuration:     time.Duration(video.Duration) * time.Second,
+			Link:              "https://www.youtube.com/watch?v=" + video.ID,
+			ytAPI:             yt,
 		}
 	}
 

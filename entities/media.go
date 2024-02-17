@@ -15,5 +15,6 @@ type Media interface {
 	Title() string
 	Thumbnail() string
 	CanJumpToTimeStamp() bool
+	IsLiveStream() bool
 	Duration() *time.Duration
 }

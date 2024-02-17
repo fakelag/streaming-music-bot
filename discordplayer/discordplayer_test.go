@@ -72,6 +72,10 @@ func (mm *MockMedia) Thumbnail() string {
 	return ""
 }
 
+func (mm *MockMedia) IsLiveStream() bool {
+	return false
+}
+
 func (mp *MockPlaylist) Title() string {
 	return "Mock Playlist"
 }

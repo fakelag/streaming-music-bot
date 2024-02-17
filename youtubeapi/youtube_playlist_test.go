@@ -17,22 +17,22 @@ func NewPlaylistWithMedia() *youtubeapi.YoutubePlaylist {
 
 	expireAt := time.Now().Add(10 * time.Minute)
 	media1 := &youtubeapi.YoutubeMedia{
-		ID:              "1",
-		VideoTitle:      "Mock Media 1",
-		IsLiveStream:    false,
-		VideoDuration:   60 * time.Second,
-		StreamURL:       "streamurl1",
-		StreamExpiresAt: &expireAt,
+		ID:                "1",
+		VideoTitle:        "Mock Media 1",
+		VideoIsLiveStream: false,
+		VideoDuration:     60 * time.Second,
+		StreamURL:         "streamurl1",
+		StreamExpiresAt:   &expireAt,
 	}
 
 	expireAt = time.Now().Add(10 * time.Minute)
 	media2 := &youtubeapi.YoutubeMedia{
-		ID:              "2",
-		VideoTitle:      "Mock Media 2",
-		IsLiveStream:    true,
-		VideoDuration:   0 * time.Second,
-		StreamURL:       "streamurl2",
-		StreamExpiresAt: &expireAt,
+		ID:                "2",
+		VideoTitle:        "Mock Media 2",
+		VideoIsLiveStream: true,
+		VideoDuration:     0 * time.Second,
+		StreamURL:         "streamurl2",
+		StreamExpiresAt:   &expireAt,
 	}
 
 	mediaList := []*youtubeapi.YoutubeMedia{media1, media2}
