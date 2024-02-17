@@ -860,6 +860,10 @@ var _ = Describe("Discord Player", func() {
 				playerContext.mockDca.EXPECT().EncodeFile(playerContext.mockMedia.FileURL(), gomock.Any()).
 					Return(nil, nil).
 					Do(func(path string, encodeOptions *dca.EncodeOptions) {
+						// Update expiration
+						expireInOneHour := time.Now().Add(1 * time.Hour)
+						playerContext.mockMedia.FileURLExpireAt = &expireInOneHour
+
 						encoderCalledWithStartTime = encodeOptions.StartTime
 						playerContext.dms.Leave()
 					}),
