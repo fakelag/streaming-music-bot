@@ -351,7 +351,7 @@ func (dms *DiscordMusicSession) invokeNextMediaCallbacks(mediaFile entities.Medi
 	defer dms.mutex.RUnlock()
 
 	for _, cb := range dms.nextMediaCallbacks {
-		go cb(mediaFile, isReload)
+		go cb(dms, mediaFile, isReload)
 	}
 }
 
@@ -360,6 +360,6 @@ func (dms *DiscordMusicSession) invokeErrorCallbacks(mediaFile entities.Media, e
 	defer dms.mutex.RUnlock()
 
 	for _, cb := range dms.errorCallbacks {
-		go cb(mediaFile, err)
+		go cb(dms, mediaFile, err)
 	}
 }

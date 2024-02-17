@@ -24,8 +24,8 @@ var (
 	ErrorInvalidArgument         = errors.New("invalid argument")
 )
 
-type NextMediaCallback = func(mediaFile entities.Media, isReload bool)
-type ErrorCallback = func(mediaFile entities.Media, err error)
+type NextMediaCallback = func(session *DiscordMusicSession, mediaFile entities.Media, isReload bool)
+type ErrorCallback = func(session *DiscordMusicSession, mediaFile entities.Media, err error)
 
 type DiscordMusicSession struct {
 	mutex sync.RWMutex

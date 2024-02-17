@@ -1218,7 +1218,7 @@ var _ = Describe("Discord Player", func() {
 			playerContext := JoinMockVoiceChannelAndPlayEx(context.TODO(), ctrl, currentMediaDone, false, mockDcaStreamingSession)
 
 			isSecondCall := false
-			playerContext.dms.AddNextMediaCallback(func(mediaFile entities.Media, isReload bool) {
+			playerContext.dms.AddNextMediaCallback(func(_ *discordplayer.DiscordMusicSession, mediaFile entities.Media, isReload bool) {
 				defer GinkgoRecover()
 				Expect(mediaFile).NotTo(BeNil())
 				Expect(mediaFile.FileURL()).To(Equal(playerContext.mockMedia.FileURL()))
@@ -1261,7 +1261,7 @@ var _ = Describe("Discord Player", func() {
 			mockDcaStreamingSession := NewMockDcaStreamingSession(ctrl)
 			playerContext := JoinMockVoiceChannelAndPlayEx(context.TODO(), ctrl, currentMediaDone, false, mockDcaStreamingSession)
 
-			playerContext.dms.AddErrorCallback(func(mediaFile entities.Media, err error) {
+			playerContext.dms.AddErrorCallback(func(_ *discordplayer.DiscordMusicSession, mediaFile entities.Media, err error) {
 				defer GinkgoRecover()
 				Expect(mediaFile).NotTo(BeNil())
 				Expect(mediaFile.FileURL()).To(Equal(playerContext.mockMedia.FileURL()))
