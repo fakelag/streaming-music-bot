@@ -1,4 +1,4 @@
-package youtube
+package youtubeapi
 
 import (
 	"encoding/json"
@@ -68,6 +68,10 @@ func NewYoutubeAPI() *Youtube {
 	}
 
 	return yt
+}
+
+func (yt *Youtube) SetCmdExecutor(exec cmd.CommandExecutor) {
+	yt.executor = exec
 }
 
 func (yt *Youtube) GetYoutubeMedia(videoIdOrSearchTerm string) (*YoutubeMedia, error) {
@@ -229,14 +233,7 @@ func (yt *Youtube) GetYoutubePlaylist(playlistIdOrUrl string) (*YoutubePlaylist,
 	rngSource := rand.NewSource(time.Now().Unix())
 	rng := rand.New(rngSource)
 
-	playList := &YoutubePlaylist{
-		ID:                   ytDlpPlaylist.ID,
-		PlaylistTitle:        ytDlpPlaylist.Title,
-		removeMediaOnConsume: true,
-		rng:                  rng,
-		consumeOrder:         entities.ConsumeOrderFromStart,
-		mediaList:            make([]*YoutubeMedia, len(ytDlpPlaylist.Entries)),
-	}
+	playList := NewYoutubePlaylist(ytDlpPlaylist.ID, ytDlpPlaylist.Title, rng, len(ytDlpPlaylist.Entries))
 
 	for index, video := range ytDlpPlaylist.Entries {
 		thumbnailUrl := ""
@@ -262,6 +259,29 @@ func (yt *Youtube) GetYoutubePlaylist(playlistIdOrUrl string) (*YoutubePlaylist,
 	}
 
 	return playList, nil
+}
+
+func NewYoutubePlaylist(
+	playlistID string,
+	playlistTitle string,
+	rng *rand.Rand,
+	numEntries int,
+	entries ...*YoutubeMedia,
+) *YoutubePlaylist {
+	pl := &YoutubePlaylist{
+		ID:                   playlistID,
+		PlaylistTitle:        playlistTitle,
+		rng:                  rng,
+		removeMediaOnConsume: true,
+		consumeOrder:         entities.ConsumeOrderFromStart,
+		mediaList:            make([]*YoutubeMedia, numEntries),
+	}
+
+	for index, entry := range entries {
+		pl.mediaList[index] = entry
+	}
+
+	return pl
 }
 
 func getYtDlpPath() (string, error) {

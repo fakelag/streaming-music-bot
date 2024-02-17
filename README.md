@@ -33,7 +33,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/fakelag/streaming-music-bot/discordplayer"
-	"github.com/fakelag/streaming-music-bot/youtube"
+	"github.com/fakelag/streaming-music-bot/youtubeapi"
 )
 
 const GuildID = "YOUR_GUILD_ID"
@@ -71,7 +71,7 @@ func main() {
 		panic(err)
 	}
 
-	youtubeApi = youtube.NewYoutubeAPI()
+	youtubeApi = youtubeapi.NewYoutubeAPI()
 	media, err := youtubeApi.GetYoutubeMedia(SearchTerm)
 
 	if err != nil {

@@ -1,4 +1,4 @@
-package youtube_test
+package youtubeapi_test
 
 import (
 	"testing"

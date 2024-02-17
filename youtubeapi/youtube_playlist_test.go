@@ -1,21 +1,22 @@
-package youtube
+package youtubeapi_test
 
 import (
 	"math/rand"
 	"time"
 
 	"github.com/fakelag/streaming-music-bot/entities"
+	"github.com/fakelag/streaming-music-bot/youtubeapi"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
-func NewPlaylistWithMedia() *YoutubePlaylist {
+func NewPlaylistWithMedia() *youtubeapi.YoutubePlaylist {
 	rngSource := rand.NewSource(GinkgoRandomSeed())
 	rng := rand.New(rngSource)
 
 	expireAt := time.Now().Add(10 * time.Minute)
-	media1 := &YoutubeMedia{
+	media1 := &youtubeapi.YoutubeMedia{
 		ID:              "1",
 		VideoTitle:      "Mock Media 1",
 		IsLiveStream:    false,
@@ -25,7 +26,7 @@ func NewPlaylistWithMedia() *YoutubePlaylist {
 	}
 
 	expireAt = time.Now().Add(10 * time.Minute)
-	media2 := &YoutubeMedia{
+	media2 := &youtubeapi.YoutubeMedia{
 		ID:              "2",
 		VideoTitle:      "Mock Media 2",
 		IsLiveStream:    true,
@@ -34,14 +35,8 @@ func NewPlaylistWithMedia() *YoutubePlaylist {
 		StreamExpiresAt: &expireAt,
 	}
 
-	return &YoutubePlaylist{
-		ID:                   "3",
-		PlaylistTitle:        "Mock Playlist",
-		rng:                  rng,
-		removeMediaOnConsume: true,
-		consumeOrder:         entities.ConsumeOrderFromStart,
-		mediaList:            []*YoutubeMedia{media1, media2},
-	}
+	mediaList := []*youtubeapi.YoutubeMedia{media1, media2}
+	return youtubeapi.NewYoutubePlaylist("3", "Mock Playlist", rng, len(mediaList), mediaList...)
 }
 
 var _ = Describe("YT Playlists", func() {

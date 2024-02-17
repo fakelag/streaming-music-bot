@@ -8,7 +8,7 @@ import (
 	"time"
 
 	discordplayer "github.com/fakelag/streaming-music-bot/discordplayer"
-	"github.com/fakelag/streaming-music-bot/youtube"
+	"github.com/fakelag/streaming-music-bot/youtubeapi"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -46,7 +46,7 @@ func main() {
 
 	defer discord.Close()
 
-	yt := youtube.NewYoutubeAPI()
+	yt := youtubeapi.NewYoutubeAPI()
 	media, err := yt.GetYoutubeMedia(ytSearchTerm)
 
 	if err != nil {

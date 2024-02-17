@@ -1,4 +1,4 @@
-package youtube
+package youtubeapi
 
 import (
 	"math/rand"

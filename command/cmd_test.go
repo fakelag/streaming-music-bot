@@ -1,17 +1,18 @@
-package cmd
+package cmd_test
 
 import (
 	"runtime"
 	"strings"
 	"time"
 
+	cmd "github.com/fakelag/streaming-music-bot/command"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
 var _ = Describe("Command Executor", func() {
 	It("Runs an executable", func() {
-		executor := &DefaultCommandExecutor{}
+		executor := &cmd.DefaultCommandExecutor{}
 
 		cmd := "echo"
 		args := []string{"foo"}
@@ -33,7 +34,7 @@ var _ = Describe("Command Executor", func() {
 	})
 
 	It("Timeouts execution after timeout duration", func() {
-		executor := &DefaultCommandExecutor{}
+		executor := &cmd.DefaultCommandExecutor{}
 
 		cmd := "sleep"
 		args := []string{"20s"}

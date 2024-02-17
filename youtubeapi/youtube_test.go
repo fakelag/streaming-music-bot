@@ -1,4 +1,4 @@
-package youtube
+package youtubeapi_test
 
 import (
 	"errors"
@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/fakelag/streaming-music-bot/entities"
+	"github.com/fakelag/streaming-music-bot/youtubeapi"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -99,8 +100,8 @@ var _ = Describe("YT Download", func() {
 				MockStdoutResult: "url123\n" + mockVideoJson,
 			}
 
-			yt := NewYoutubeAPI()
-			yt.executor = mockExecutor
+			yt := youtubeapi.NewYoutubeAPI()
+			yt.SetCmdExecutor(mockExecutor)
 
 			media, err := yt.GetYoutubeMedia("foo")
 			Expect(err).To(BeNil())
@@ -120,8 +121,8 @@ var _ = Describe("YT Download", func() {
 					MockStdoutResult: streamUrl + mockVideoJson,
 				}
 
-				yt := NewYoutubeAPI()
-				yt.executor = mockExecutor
+				yt := youtubeapi.NewYoutubeAPI()
+				yt.SetCmdExecutor(mockExecutor)
 
 				media, err := yt.GetYoutubeMedia("foo")
 				Expect(err).To(BeNil())
@@ -137,8 +138,8 @@ var _ = Describe("YT Download", func() {
 				MockExitCode:     1,
 			}
 
-			yt := NewYoutubeAPI()
-			yt.executor = mockExecutor
+			yt := youtubeapi.NewYoutubeAPI()
+			yt.SetCmdExecutor(mockExecutor)
 
 			_, err := yt.GetYoutubeMedia("foo")
 			Expect(err).To(MatchError("exit status 1"))
@@ -149,8 +150,8 @@ var _ = Describe("YT Download", func() {
 				MockStdoutResult: "url123\n{",
 			}
 
-			yt := NewYoutubeAPI()
-			yt.executor = mockExecutor
+			yt := youtubeapi.NewYoutubeAPI()
+			yt.SetCmdExecutor(mockExecutor)
 
 			_, err := yt.GetYoutubeMedia("foo")
 			Expect(err).To(MatchError("unexpected end of JSON input"))
@@ -163,8 +164,8 @@ var _ = Describe("YT Download", func() {
 				MockStdoutResult: mockPlaylistJson,
 			}
 
-			yt := NewYoutubeAPI()
-			yt.executor = mockExecutor
+			yt := youtubeapi.NewYoutubeAPI()
+			yt.SetCmdExecutor(mockExecutor)
 
 			playList, err := yt.GetYoutubePlaylist("foo")
 			playList.SetConsumeOrder(entities.ConsumeOrderFromStart)
@@ -179,11 +180,11 @@ var _ = Describe("YT Download", func() {
 			media1, err := playList.ConsumeNextMedia()
 			Expect(err).To(BeNil())
 
-			Expect(media0).Should(BeAssignableToTypeOf(&YoutubeMedia{}))
-			Expect(media1).Should(BeAssignableToTypeOf(&YoutubeMedia{}))
+			Expect(media0).Should(BeAssignableToTypeOf(&youtubeapi.YoutubeMedia{}))
+			Expect(media1).Should(BeAssignableToTypeOf(&youtubeapi.YoutubeMedia{}))
 
-			ytMedia0 := media0.(*YoutubeMedia)
-			ytMedia1 := media1.(*YoutubeMedia)
+			ytMedia0 := media0.(*youtubeapi.YoutubeMedia)
+			ytMedia1 := media1.(*youtubeapi.YoutubeMedia)
 
 			Expect(ytMedia0.ID).Should(Equal("0"))
 			Expect(ytMedia0.Title()).Should(Equal("foobar"))
@@ -205,8 +206,8 @@ var _ = Describe("YT Download", func() {
 				MockStdoutResult: "{",
 			}
 
-			yt := NewYoutubeAPI()
-			yt.executor = mockExecutor
+			yt := youtubeapi.NewYoutubeAPI()
+			yt.SetCmdExecutor(mockExecutor)
 
 			_, err := yt.GetYoutubePlaylist("foo")
 			Expect(err).To(MatchError("unexpected end of JSON input"))
