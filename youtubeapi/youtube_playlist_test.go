@@ -50,6 +50,8 @@ var _ = Describe("YT Playlists", func() {
 			Expect(playList.GetRemoveOnConsume()).To(BeTrue())
 			Expect(playList.GetConsumeOrder()).To(Equal(entities.ConsumeOrderFromStart))
 			Expect(playList.GetMediaCount()).To(Equal(2))
+			Expect(playList.GetDurationLeft()).NotTo(BeNil())
+			Expect(*playList.GetDurationLeft()).To(Equal(60 * time.Second))
 
 			media, err := playList.ConsumeNextMedia()
 			Expect(err).ToNot(HaveOccurred())

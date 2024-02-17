@@ -1,6 +1,9 @@
 package entities
 
-import "errors"
+import (
+	"errors"
+	"time"
+)
 
 type PlaylistConsumeOrder = string
 
@@ -21,6 +24,7 @@ type Playlist interface {
 	SetRemoveOnConsume(removeOnConsume bool)
 	GetAvailableConsumeOrders() []PlaylistConsumeOrder
 	GetMediaCount() int
+	GetDurationLeft() *time.Duration
 	GetRemoveOnConsume() bool
 	GetConsumeOrder() PlaylistConsumeOrder
 }

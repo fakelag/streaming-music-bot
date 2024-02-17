@@ -133,6 +133,10 @@ func (mp *MockPlaylist) GetConsumeOrder() entities.PlaylistConsumeOrder {
 	return entities.ConsumeOrderFromStart
 }
 
+func (mp *MockPlaylist) GetDurationLeft() *time.Duration {
+	return nil
+}
+
 type JoinVoiceAndPlayContext struct {
 	mockVoiceConnection *MockDiscordVoiceConnection
 	mockDiscordSession  *MockDiscordSession

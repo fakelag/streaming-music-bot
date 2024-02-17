@@ -3,6 +3,7 @@ package youtubeapi
 import (
 	"math/rand"
 	"sync"
+	"time"
 
 	"github.com/fakelag/streaming-music-bot/entities"
 )
@@ -106,6 +107,22 @@ func (ypl *YoutubePlaylist) GetConsumeOrder() entities.PlaylistConsumeOrder {
 	ypl.RLock()
 	defer ypl.RUnlock()
 	return ypl.consumeOrder
+}
+
+func (ypl *YoutubePlaylist) GetDurationLeft() *time.Duration {
+	ypl.RLock()
+	defer ypl.RUnlock()
+
+	durationLeft := time.Duration(0)
+	for _, media := range ypl.mediaList {
+		mediaDuration := media.Duration()
+
+		if mediaDuration != nil {
+			durationLeft += *mediaDuration
+		}
+	}
+
+	return &durationLeft
 }
 
 // Verify implements entities.Playlist
