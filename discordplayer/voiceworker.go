@@ -240,17 +240,19 @@ func (dms *DiscordMusicSession) consumeNextMediaFromQueue() entities.Media {
 
 func (dms *DiscordMusicSession) consumeNextMediaFromPlaylist() entities.Media {
 	dms.mutex.RLock()
-	defer dms.mutex.RUnlock()
 
 	if dms.currentPlaylist == nil {
+		dms.mutex.RUnlock()
 		return nil
 	}
 
 	media, err := dms.currentPlaylist.ConsumeNextMedia()
 
+	dms.mutex.RUnlock()
+
 	if err != nil {
 		if errors.Is(err, entities.ErrorPlaylistEmpty) {
-			// TODO: remove playlist
+			dms.ClearPlaylist()
 			return nil
 		}
 		// TODO: log error

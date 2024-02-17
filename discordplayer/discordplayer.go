@@ -137,6 +137,12 @@ func (dms *DiscordMusicSession) ClearPlaylist() {
 	dms.currentPlaylist = nil
 }
 
+func (dms *DiscordMusicSession) GetCurrentPlaylist() entities.Playlist {
+	dms.mutex.RLock()
+	defer dms.mutex.RUnlock()
+	return dms.currentPlaylist
+}
+
 func (dms *DiscordMusicSession) ClearMediaQueue() bool {
 	dms.mutex.Lock()
 	defer dms.mutex.Unlock()
