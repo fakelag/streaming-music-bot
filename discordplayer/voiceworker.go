@@ -278,7 +278,7 @@ func (dms *DiscordMusicSession) checkDiscordVoiceConnection() error {
 func (dms *DiscordMusicSession) voiceWorkerContext() (ctx context.Context, cancel context.CancelFunc) {
 	ctx, cancel = context.WithCancel(dms.workerCtx)
 
-	if dms.leaveAfterChannelEmptyTime <= time.Duration(0) {
+	if dms.leaveAfterChannelEmptyTime == time.Duration(0) {
 		return
 	}
 
