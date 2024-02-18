@@ -1340,4 +1340,77 @@ var _ = Describe("Discord Player", func() {
 			}
 		})
 	})
+
+	When("Changing the channel on a DiscordMusicSession", func() {
+		It("Changes the channel when not yet playing", func() {
+			ctrl := gomock.NewController(GinkgoT())
+
+			mockDca := NewMockDiscordAudio(ctrl)
+			mockDiscordSession := NewMockDiscordSession(ctrl)
+
+			dms, err := discordplayer.NewDiscordMusicSessionEx(context.TODO(), mockDca, mockDiscordSession, &discordplayer.DiscordMusicSessionOptions{
+				GuildID:           gID,
+				VoiceChannelID:    cID,
+				MediaQueueMaxSize: 10,
+			})
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(dms).NotTo(BeNil())
+
+			Expect(dms.GetGuildID()).To(Equal(gID))
+			Expect(dms.GetVoiceChannelID()).To(Equal(cID))
+
+			newChannelID := "new-channel-id"
+			workerStopped, err := dms.SetVoiceChannelID(newChannelID)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(workerStopped).To(BeFalse())
+
+			Expect(dms.GetGuildID()).To(Equal(gID))
+			Expect(dms.GetVoiceChannelID()).To(Equal(newChannelID))
+
+			Expect(dms.Leave()).To(MatchError(discordplayer.ErrorWorkerNotActive))
+		})
+
+		It("Changes the channel and continues playing with a fresh queue", func() {
+			ctrl := gomock.NewController(GinkgoT())
+
+			playerContext := JoinMockVoiceChannelAndPlay(ctrl, make(chan error))
+
+			newChannelID := "new-channel-id"
+			playerContext.mockVoiceConnection.EXPECT().Speaking(gomock.Any()).AnyTimes()
+			playerContext.mockVoiceConnection.EXPECT().IsReady().Return(true).AnyTimes()
+			playerContext.mockDiscordSession.EXPECT().ChannelVoiceJoin(gID, newChannelID, false, false).Return(playerContext.mockVoiceConnection, nil)
+			playerContext.mockDca.EXPECT().EncodeFile(playerContext.mockMedia.FileURL(), gomock.Any()).Return(nil, nil).AnyTimes()
+			playerContext.mockDca.EXPECT().NewStream(nil, playerContext.mockVoiceConnection, gomock.Any()).Return(nil).AnyTimes()
+			playerContext.mockVoiceConnection.EXPECT().Disconnect().Times(2)
+
+			Eventually(func() entities.Media {
+				return playerContext.dms.GetCurrentlyPlayingMedia()
+			}).WithTimeout(2 * time.Second).WithPolling(50 * time.Millisecond).ShouldNot(BeNil())
+
+			workerStopped, err := playerContext.dms.SetVoiceChannelID(newChannelID)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(workerStopped).To(BeTrue())
+
+			Expect(playerContext.dms.GetMediaQueue()).To(HaveLen(0))
+			Expect(playerContext.dms.EnqueueMedia(playerContext.mockMedia)).To(Succeed())
+
+			ctx, err := playerContext.dms.Start()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ctx).NotTo(BeNil())
+
+			Eventually(func() entities.Media {
+				return playerContext.dms.GetCurrentlyPlayingMedia()
+			}).WithTimeout(2 * time.Second).WithPolling(50 * time.Millisecond).ShouldNot(BeNil())
+
+			Expect(playerContext.dms.Leave()).To(Succeed())
+
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(20 * time.Second):
+				Fail("Voice worker timed out")
+			}
+		})
+	})
 })
