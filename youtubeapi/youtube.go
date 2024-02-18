@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"net/url"
 	"os/exec"
 	"regexp"
 	"strconv"
@@ -81,12 +82,14 @@ func (yt *Youtube) GetYoutubeMedia(videoIdOrSearchTerm string) (*YoutubeMedia, e
 		return nil, err
 	}
 
-	useSearch := true
-
 	videoArg := videoIdOrSearchTerm
 
-	if useSearch {
+	videoID := getYoutubeUrlVideoId(videoIdOrSearchTerm)
+
+	if videoID == "" {
 		videoArg = "ytsearch:" + videoIdOrSearchTerm
+	} else {
+		videoArg = "https://www.youtube.com/watch?v=" + videoID
 	}
 
 	replacer := strings.NewReplacer(
@@ -284,6 +287,28 @@ func NewYoutubePlaylist(
 	}
 
 	return pl
+}
+
+func getYoutubeUrlVideoId(urlString string) string {
+	parsedUrl, err := url.Parse(urlString)
+
+	if err != nil {
+		return ""
+	}
+
+	if !strings.Contains(parsedUrl.Hostname(), "youtube") && !strings.Contains(parsedUrl.Hostname(), "youtu.be") {
+		return ""
+	}
+
+	rx := regexp.MustCompile("^.*(?:(?:youtu\\.be\\/|v\\/|vi\\/|u\\/\\w\\/|embed\\/|shorts\\/)|(?:(?:watch)?\\?v(?:i)?=|\\&v(?:i)?=))([^#\\&\\?]*).*")
+
+	results := rx.FindStringSubmatch(urlString)
+
+	if len(results) >= 2 {
+		return results[1]
+	}
+
+	return ""
 }
 
 func getYtDlpPath() (string, error) {
