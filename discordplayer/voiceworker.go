@@ -19,11 +19,12 @@ type DcaMediaSession struct {
 	done             chan error
 }
 
-func (dms *DiscordMusicSession) voiceWorker(cancel context.CancelFunc) {
-	defer cancel()
+func (dms *DiscordMusicSession) voiceWorker(done context.CancelFunc) {
+	defer done()
 	defer dms.disconnectAndExitWorker()
 
-	ctx := dms.workerCtx
+	ctx, cancel := dms.voiceWorkerContext()
+	defer cancel()
 
 workerloop:
 	for {
@@ -272,6 +273,73 @@ func (dms *DiscordMusicSession) checkDiscordVoiceConnection() error {
 
 	dms.voiceConnection = newVoiceConnection
 	return nil
+}
+
+func (dms *DiscordMusicSession) voiceWorkerContext() (ctx context.Context, cancel context.CancelFunc) {
+	ctx, cancel = context.WithCancel(dms.workerCtx)
+
+	if dms.leaveAfterChannelEmptyTime <= time.Duration(0) {
+		return
+	}
+
+	dms.mutex.RLock()
+	voiceChannelID := dms.voiceChannelID
+	dms.mutex.RUnlock()
+
+	go func() {
+		channelNotEmptyAt := time.Now()
+
+		for {
+			hasNonBotMembers, err := dms.hasNonBotMembersInVoiceChannel(voiceChannelID)
+
+			if err != nil || hasNonBotMembers {
+				channelNotEmptyAt = time.Now()
+			} else if time.Since(channelNotEmptyAt) >= dms.leaveAfterChannelEmptyTime {
+				cancel()
+				return
+			}
+
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(dms.leaveAfterChannelEmptyTimeInterval):
+				break
+			}
+		}
+	}()
+
+	return
+}
+
+func (dms *DiscordMusicSession) hasNonBotMembersInVoiceChannel(voiceChannelID string) (bool, error) {
+	guild, err := dms.discordSession.Guild(dms.guildID)
+
+	if err != nil {
+		return false, err
+	}
+
+	voiceStates := guild.GetVoiceStates()
+
+	hasNonBotMembersInVC := false
+
+	for _, vs := range voiceStates {
+		if voiceChannelID != vs.GetChannelID() {
+			continue
+		}
+
+		user, err := dms.discordSession.User(vs.GetUserID())
+
+		if err != nil {
+			return false, err
+		}
+
+		if !user.Bot() {
+			hasNonBotMembersInVC = true
+			break
+		}
+	}
+
+	return hasNonBotMembersInVC, nil
 }
 
 func (dms *DiscordMusicSession) disconnectAndExitWorker() {
