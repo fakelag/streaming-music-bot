@@ -187,14 +187,13 @@ func JoinMockVoiceChannelAndPlayEx(
 		MediaQueueMaxSize: 10,
 	})
 
-	if err != nil {
-		panic(err)
-	}
-
+	Expect(err).NotTo(HaveOccurred())
 	Expect(dms).NotTo(BeNil())
 
 	if enqueueMedia {
 		Expect(dms.EnqueueMedia(mockMedia)).NotTo(HaveOccurred())
+		_, err := dms.Start()
+		Expect(err).NotTo(HaveOccurred())
 	}
 
 	return &JoinVoiceAndPlayContext{
@@ -297,6 +296,8 @@ var _ = Describe("Discord Player", func() {
 			Expect(playerContext.dms.Leave()).To(MatchError(discordplayer.ErrorWorkerNotActive))
 
 			playerContext.dms.EnqueueMedia(playerContext.mockMedia)
+			_, err := playerContext.dms.Start()
+			Expect(err).NotTo(HaveOccurred())
 
 			go func() {
 				time.Sleep(1 * time.Second)
@@ -662,6 +663,8 @@ var _ = Describe("Discord Player", func() {
 			for index := 0; index < 10; index += 1 {
 				Expect(playerContext.dms.EnqueueMedia(playerContext.mockMedia)).NotTo(HaveOccurred())
 			}
+			_, err := playerContext.dms.Start()
+			Expect(err).NotTo(HaveOccurred())
 
 			Eventually(func() int {
 				return len(playerContext.dms.GetMediaQueue())
@@ -743,6 +746,8 @@ var _ = Describe("Discord Player", func() {
 
 			Expect(playerContext.dms.GetCurrentPlaylist()).To(BeNil())
 			playerContext.dms.StartPlaylist(mockPlaylist)
+			_, err := playerContext.dms.Start()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(playerContext.dms.GetCurrentPlaylist()).NotTo(BeNil())
 			Expect(playerContext.dms.GetCurrentPlaylist().Title()).Should(Equal(mockPlaylist.Title()))
 
@@ -820,6 +825,8 @@ var _ = Describe("Discord Player", func() {
 			mockPlaylist.AddMedia(playerContext.mockMedia)
 			mockPlaylist.AddMedia(NewMockMedia(thirdMediaTitle, thirdMediaURL))
 			playerContext.dms.StartPlaylist(mockPlaylist)
+			_, err := playerContext.dms.Start()
+			Expect(err).NotTo(HaveOccurred())
 
 			Eventually(func() string {
 				media := playerContext.dms.GetCurrentlyPlayingMedia()
@@ -1058,6 +1065,8 @@ var _ = Describe("Discord Player", func() {
 			wg.Add(1)
 
 			Expect(playerContext.dms.EnqueueMedia(playerContext.mockMedia)).NotTo(HaveOccurred())
+			_, err := playerContext.dms.Start()
+			Expect(err).NotTo(HaveOccurred())
 
 			mockDcaStreamingSession.EXPECT().PlaybackPosition().Return(10 * time.Second).MinTimes(1)
 			playerContext.mockVoiceConnection.EXPECT().Speaking(gomock.Any()).AnyTimes()
@@ -1112,6 +1121,8 @@ var _ = Describe("Discord Player", func() {
 			playerContext.mockVoiceConnection.EXPECT().IsReady().Return(true).AnyTimes()
 
 			Expect(playerContext.dms.EnqueueMedia(playerContext.mockMedia)).To(Succeed())
+			_, err := playerContext.dms.Start()
+			Expect(err).NotTo(HaveOccurred())
 
 			c := make(chan struct{})
 
@@ -1144,7 +1155,7 @@ var _ = Describe("Discord Player", func() {
 		})
 	})
 
-	When("Giving a custom context to DiscordMusicSession", func() {
+	When("Using contexts with DiscordMusicSession", func() {
 		It("Stops the worker and exits gracefully when top-level context is canceled when actively playing media", func() {
 			ctx, cancel := context.WithCancel(context.TODO())
 			ctrl := gomock.NewController(GinkgoT())
@@ -1207,6 +1218,40 @@ var _ = Describe("Discord Player", func() {
 				Fail("Voice worker timed out")
 			}
 		})
+
+		It("Gives a worker context when calling Start that is canceled when the worker exits", func() {
+			ctx, cancel := context.WithCancel(context.TODO())
+			defer cancel()
+
+			ctrl := gomock.NewController(GinkgoT())
+
+			currentMediaDone := make(chan error)
+			mockDcaStreamingSession := NewMockDcaStreamingSession(ctrl)
+			playerContext := JoinMockVoiceChannelAndPlayEx(ctx, ctrl, currentMediaDone, false, mockDcaStreamingSession)
+
+			playerContext.mockVoiceConnection.EXPECT().Speaking(gomock.Any()).AnyTimes()
+			playerContext.mockVoiceConnection.EXPECT().IsReady().Return(true).AnyTimes()
+			playerContext.mockVoiceConnection.EXPECT().Disconnect().AnyTimes()
+
+			Expect(playerContext.dms.EnqueueMedia(playerContext.mockMedia)).To(Succeed())
+
+			workerCtx, err := playerContext.dms.Start()
+			Expect(workerCtx).NotTo(BeNil())
+			Expect(err).NotTo(HaveOccurred())
+
+			nilWorkerCtx, err := playerContext.dms.Start()
+			Expect(nilWorkerCtx).To(BeNil())
+			Expect(err).To(MatchError(discordplayer.ErrorWorkerAlreadyActive))
+
+			Expect(playerContext.dms.Leave()).To(Succeed())
+
+			select {
+			case <-workerCtx.Done():
+				return
+			case <-time.After(20 * time.Second):
+				Fail("Voice worker timed out")
+			}
+		})
 	})
 
 	When("Adding custom callbacks to DiscordMusicSession", func() {
@@ -1240,7 +1285,10 @@ var _ = Describe("Discord Player", func() {
 				close(c)
 			})
 
-			playerContext.dms.EnqueueMedia(playerContext.mockMedia)
+			Expect(playerContext.dms.EnqueueMedia(playerContext.mockMedia)).To(Succeed())
+
+			_, err := playerContext.dms.Start()
+			Expect(err).NotTo(HaveOccurred())
 
 			// Error to force a reload
 			currentMediaDone <- errors.New("Voice connection closed")
@@ -1278,7 +1326,9 @@ var _ = Describe("Discord Player", func() {
 				close(c)
 			})
 
-			playerContext.dms.EnqueueMedia(playerContext.mockMedia)
+			Expect(playerContext.dms.EnqueueMedia(playerContext.mockMedia)).To(Succeed())
+			_, err := playerContext.dms.Start()
+			Expect(err).NotTo(HaveOccurred())
 
 			currentMediaDone <- mediaError
 

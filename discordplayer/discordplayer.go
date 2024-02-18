@@ -15,6 +15,7 @@ import (
 
 var (
 	ErrorWorkerNotActive         = errors.New("voice worker inactive")
+	ErrorWorkerAlreadyActive     = errors.New("voice worker is already active")
 	ErrorNotStreaming            = errors.New("not currently streaming")
 	ErrorCommandAlreadySent      = errors.New("command already sent")
 	ErrorInvalidMedia            = errors.New("invalid media")
@@ -22,6 +23,8 @@ var (
 	ErrorNoMediaFound            = errors.New("no media found")
 	ErrorMediaUnsupportedFeature = errors.New("unsupported feature by current media")
 	ErrorInvalidArgument         = errors.New("invalid argument")
+	ErrorNoVoiceChannelSet       = errors.New("no voice channel set")
+	ErrorWaitingForWorkerTimeout = errors.New("timed out waiting for worker")
 )
 
 type NextMediaCallback = func(session *DiscordMusicSession, mediaFile entities.Media, isReload bool)
@@ -32,14 +35,15 @@ type DiscordMusicSession struct {
 
 	// Static fields, unlocked access
 	guildID        string
-	voiceChannelID string
 	discordSession DiscordSession
-	ctx            context.Context
+	parentCtx      context.Context
 
 	// Worker fields, unlocked access in worker goroutine
 	dca             DiscordAudio
 	voiceConnection DiscordVoiceConnection
+	workerCtx       context.Context
 
+	voiceChannelID        string
 	currentMediaSession   *DcaMediaSession
 	currentlyPlayingMedia entities.Media
 	lastCompletedMedia    entities.Media
@@ -94,7 +98,8 @@ func NewDiscordMusicSessionEx(
 		voiceConnection:    nil,
 		discordSession:     discord,
 		dca:                dca,
-		ctx:                ctx,
+		workerCtx:          nil,
+		parentCtx:          ctx,
 		mediaQueue:         make([]entities.Media, 0),
 		mediaQueueMaxSize:  options.MediaQueueMaxSize,
 		nextMediaCallbacks: make([]NextMediaCallback, 0),
@@ -117,9 +122,6 @@ func (dms *DiscordMusicSession) EnqueueMedia(media entities.Media) error {
 	}
 
 	dms.mediaQueue = append(dms.mediaQueue, media)
-
-	dms.startVoiceWorkerNoLock(dms.ctx)
-
 	return nil
 }
 
@@ -127,8 +129,63 @@ func (dms *DiscordMusicSession) StartPlaylist(playlist entities.Playlist) {
 	dms.mutex.Lock()
 	defer dms.mutex.Unlock()
 	dms.currentPlaylist = playlist
+}
 
-	dms.startVoiceWorkerNoLock(dms.ctx)
+// Starts voice worker, returns an error if the worker is already active
+func (dms *DiscordMusicSession) Start() (context.Context, error) {
+	dms.mutex.Lock()
+	defer dms.mutex.Unlock()
+
+	if dms.workerActive {
+		return nil, ErrorWorkerAlreadyActive
+	}
+
+	if dms.voiceChannelID == "" {
+		return nil, ErrorNoVoiceChannelSet
+	}
+
+	dms.chanLeaveCommand = make(chan bool, 1)
+	dms.chanSkipCommand = make(chan bool, 1)
+	dms.chanRepeatCommand = make(chan bool, 1)
+	dms.chanJumpCommand = make(chan time.Duration, 1)
+
+	workerCtx, cancel := context.WithCancel(dms.parentCtx)
+	dms.workerCtx = workerCtx
+
+	go dms.voiceWorker(cancel)
+	dms.workerActive = true
+
+	return workerCtx, nil
+}
+
+// Noop if current voice channel is already set to the given voiceChannelID
+// If current voice channel is different, this stops the worker and sets new channel id
+func (dms *DiscordMusicSession) SetVoiceChannelID(voiceChannelID string) (workerStopped bool, err error) {
+	dms.mutex.RLock()
+	if dms.voiceChannelID == voiceChannelID {
+		dms.mutex.RUnlock()
+		return false, nil
+	}
+	isWorkerActive := dms.workerActive
+	workerCtx := dms.workerCtx
+	dms.mutex.RUnlock()
+
+	if isWorkerActive {
+		dms.Leave()
+
+		select {
+		case <-workerCtx.Done():
+			break
+		case <-time.After(5 * time.Second):
+			return false, ErrorWaitingForWorkerTimeout
+		}
+	}
+
+	dms.mutex.Lock()
+	dms.voiceChannelID = voiceChannelID
+	dms.mutex.Unlock()
+
+	return isWorkerActive, nil
 }
 
 func (dms *DiscordMusicSession) ClearPlaylist() {
@@ -288,6 +345,16 @@ func (dms *DiscordMusicSession) AddErrorCallback(cb ErrorCallback) {
 	dms.errorCallbacks = append(dms.errorCallbacks, cb)
 }
 
+func (dms *DiscordMusicSession) GetVoiceChannelID() string {
+	dms.mutex.RLock()
+	defer dms.mutex.RUnlock()
+	return dms.voiceChannelID
+}
+
+func (dms *DiscordMusicSession) GetGuildID() string {
+	return dms.guildID
+}
+
 func (dms *DiscordMusicSession) sendCommand(command chan bool) error {
 	dms.mutex.Lock()
 	defer dms.mutex.Unlock()
@@ -302,26 +369,4 @@ func (dms *DiscordMusicSession) sendCommand(command chan bool) error {
 
 	command <- true
 	return nil
-}
-
-func (dms *DiscordMusicSession) startVoiceWorkerNoLock(ctx context.Context) {
-	if dms.workerActive {
-		return
-	}
-
-	dms.chanLeaveCommand = make(chan bool, 1)
-	dms.chanSkipCommand = make(chan bool, 1)
-	dms.chanRepeatCommand = make(chan bool, 1)
-	dms.chanJumpCommand = make(chan time.Duration, 1)
-
-	go dms.voiceWorker(ctx)
-	dms.workerActive = true
-}
-
-func (dms *DiscordMusicSession) GetVoiceChannelID() string {
-	return dms.voiceChannelID
-}
-
-func (dms *DiscordMusicSession) GetGuildID() string {
-	return dms.guildID
 }

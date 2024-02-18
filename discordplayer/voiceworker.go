@@ -3,7 +3,6 @@ package discordplayer
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"strings"
 	"time"
@@ -20,8 +19,11 @@ type DcaMediaSession struct {
 	done             chan error
 }
 
-func (dms *DiscordMusicSession) voiceWorker(ctx context.Context) {
+func (dms *DiscordMusicSession) voiceWorker(cancel context.CancelFunc) {
+	defer cancel()
 	defer dms.disconnectAndExitWorker()
+
+	ctx := dms.workerCtx
 
 workerloop:
 	for {
@@ -50,7 +52,6 @@ workerloop:
 				isReload = true
 
 				if err != nil {
-					fmt.Printf("Error occurred while playing: %s\n", err.Error())
 					dms.invokeErrorCallbacks(mediaFile, err)
 				}
 
@@ -107,8 +108,6 @@ func (dms *DiscordMusicSession) playMediaFile(
 		return
 	}
 
-	fmt.Printf("Playing: %s\n", mediaFile.FileURL())
-
 	_ = dms.voiceConnection.Speaking(true)
 
 	session, err := dms.playUrlInDiscord(mediaFile.FileURL(), startPlaybackAt)
@@ -130,8 +129,6 @@ func (dms *DiscordMusicSession) playMediaFile(
 
 	select {
 	case err = <-session.done:
-		fmt.Printf("done: %+v\n", err)
-
 		dms.cleanupEncodingAndVoiceSession(session.encodingSession, dms.voiceConnection)
 
 		if err == nil || err == io.EOF {
@@ -162,8 +159,6 @@ func (dms *DiscordMusicSession) playMediaFile(
 
 		return
 	case <-dms.chanLeaveCommand:
-		fmt.Printf("Bot asked to leave while playing\n")
-
 		dms.cleanupEncodingAndVoiceSession(session.encodingSession, dms.voiceConnection)
 
 		exitWorker = true
@@ -188,8 +183,6 @@ func (dms *DiscordMusicSession) playMediaFile(
 
 		return
 	case <-playMediaCtx.Done():
-		fmt.Printf("Bot context canceled. Exiting...\n")
-
 		dms.cleanupEncodingAndVoiceSession(session.encodingSession, dms.voiceConnection)
 
 		exitWorker = true
@@ -267,7 +260,11 @@ func (dms *DiscordMusicSession) checkDiscordVoiceConnection() error {
 		return nil
 	}
 
-	newVoiceConnection, err := dms.discordSession.ChannelVoiceJoin(dms.guildID, dms.voiceChannelID, false, false)
+	dms.mutex.RLock()
+	voiceChannelID := dms.voiceChannelID
+	dms.mutex.RUnlock()
+
+	newVoiceConnection, err := dms.discordSession.ChannelVoiceJoin(dms.guildID, voiceChannelID, false, false)
 
 	if err != nil {
 		return err
@@ -290,9 +287,11 @@ func (dms *DiscordMusicSession) disconnectAndExitWorker() {
 	dms.currentlyPlayingMedia = nil
 	dms.mediaQueue = make([]entities.Media, 0)
 	dms.currentPlaylist = nil
-	dms.voiceConnection.Disconnect()
 
-	fmt.Printf("Exiting voice channel %s\n", dms.voiceChannelID)
+	if dms.voiceConnection != nil {
+		dms.voiceConnection.Disconnect()
+		dms.voiceConnection = nil
+	}
 }
 
 func (dms *DiscordMusicSession) isWorkerActive() bool {
