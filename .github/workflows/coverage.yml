@@ -24,9 +24,12 @@ jobs:
         with:
           go-version-file: 'go.mod'
 
+      - name: Setup ginkgo
+        run: go get github.com/onsi/ginkgo/v2
+
       - name: Run Test
         run: |
-          go test -v ./... -covermode=count -coverprofile=coverage.out
+          ginkgo -r -p --cover -coverprofile=coverage.out
           go tool cover -func=coverage.out -o=coverage.out
 
       - name: Go Coverage Badge  # Pass the `coverage.out` output to this action
