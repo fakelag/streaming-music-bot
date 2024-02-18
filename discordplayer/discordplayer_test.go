@@ -12,6 +12,7 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"github.com/fakelag/streaming-music-bot/discordplayer"
+	discordinterface "github.com/fakelag/streaming-music-bot/discordplayer/interfaces"
 	. "github.com/fakelag/streaming-music-bot/discordplayer/mocks"
 	"github.com/fakelag/streaming-music-bot/entities"
 )
@@ -19,6 +20,7 @@ import (
 var (
 	gID = "xxx-guild-id"
 	cID = "xxx-channel-id"
+	uID = "xxx-user-id"
 )
 
 type MockMedia struct {
@@ -162,6 +164,9 @@ func JoinMockVoiceChannelAndPlayEx(
 	mockDiscordSession := NewMockDiscordSession(ctrl)
 	mockVoiceConnection := NewMockDiscordVoiceConnection(ctrl)
 	mockMedia := NewMockMedia("Mock Media", "mockurl")
+	mockGuild := NewMockDiscordGuild(ctrl)
+	mockVoiceState := NewMockDiscordVoiceState(ctrl)
+	mockUser := NewMockDiscordUser(ctrl)
 
 	gomock.InOrder(
 		mockDiscordSession.EXPECT().ChannelVoiceJoin(gID, cID, false, false).Return(mockVoiceConnection, nil),
@@ -181,14 +186,23 @@ func JoinMockVoiceChannelAndPlayEx(
 			}
 		})
 
-	dms, err := discordplayer.NewDiscordMusicSessionEx(ctx, mockDca, mockDiscordSession, &discordplayer.DiscordMusicSessionOptions{
-		GuildID:           gID,
-		VoiceChannelID:    cID,
-		MediaQueueMaxSize: 10,
+	dms, err := discordplayer.NewDiscordMusicSessionEx(ctx, mockDca, mockDiscordSession, 100*time.Millisecond, &discordplayer.DiscordMusicSessionOptions{
+		GuildID:                    gID,
+		VoiceChannelID:             cID,
+		MediaQueueMaxSize:          10,
+		LeaveAfterChannelEmptyTime: 1 * time.Second,
 	})
 
 	Expect(err).NotTo(HaveOccurred())
 	Expect(dms).NotTo(BeNil())
+
+	// Setup mocks for channel empty checks
+	mockVoiceState.EXPECT().GetUserID().Return(uID).AnyTimes()
+	mockVoiceState.EXPECT().GetChannelID().Return(cID).AnyTimes()
+	mockGuild.EXPECT().GetVoiceStates().Return([]discordinterface.DiscordVoiceState{mockVoiceState}).AnyTimes()
+	mockDiscordSession.EXPECT().Guild(gID).Return(mockGuild, nil).AnyTimes()
+	mockDiscordSession.EXPECT().User(uID).Return(mockUser, nil).AnyTimes()
+	mockUser.EXPECT().Bot().Return(false).AnyTimes()
 
 	if enqueueMedia {
 		Expect(dms.EnqueueMedia(mockMedia)).NotTo(HaveOccurred())
@@ -1348,11 +1362,12 @@ var _ = Describe("Discord Player", func() {
 			mockDca := NewMockDiscordAudio(ctrl)
 			mockDiscordSession := NewMockDiscordSession(ctrl)
 
-			dms, err := discordplayer.NewDiscordMusicSessionEx(context.TODO(), mockDca, mockDiscordSession, &discordplayer.DiscordMusicSessionOptions{
-				GuildID:           gID,
-				VoiceChannelID:    cID,
-				MediaQueueMaxSize: 10,
-			})
+			dms, err := discordplayer.NewDiscordMusicSessionEx(context.TODO(), mockDca, mockDiscordSession, 100*time.Millisecond,
+				&discordplayer.DiscordMusicSessionOptions{
+					GuildID:           gID,
+					VoiceChannelID:    cID,
+					MediaQueueMaxSize: 10,
+				})
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(dms).NotTo(BeNil())
@@ -1412,5 +1427,92 @@ var _ = Describe("Discord Player", func() {
 				Fail("Voice worker timed out")
 			}
 		})
+	})
+
+	When("Bot is left alone in the voice channel", func() {
+		DescribeTable("Leaves the channel after given timeout if leaveAfterChannelEmptyTime is set", func(
+			whenActivelyPlaying bool,
+			leaveAfterChannelEmptyTime time.Duration,
+		) {
+			ctrl := gomock.NewController(GinkgoT())
+
+			mockDca := NewMockDiscordAudio(ctrl)
+			mockDiscordSession := NewMockDiscordSession(ctrl)
+			mockVoiceConnection := NewMockDiscordVoiceConnection(ctrl)
+			mockMedia := NewMockMedia("Mock Media", "mockurl")
+			mockGuild := NewMockDiscordGuild(ctrl)
+			mockVoiceState := NewMockDiscordVoiceState(ctrl)
+			mockUser := NewMockDiscordUser(ctrl)
+
+			mockDiscordSession.EXPECT().ChannelVoiceJoin(gID, cID, false, false).Return(mockVoiceConnection, nil).AnyTimes()
+			mockVoiceConnection.EXPECT().Speaking(gomock.Any()).AnyTimes()
+			mockDca.EXPECT().EncodeFile(mockMedia.FileURL(), gomock.Any()).Return(nil, nil).AnyTimes()
+			mockDca.EXPECT().NewStream(nil, mockVoiceConnection, gomock.Any()).Return(nil).AnyTimes()
+
+			if whenActivelyPlaying && leaveAfterChannelEmptyTime > time.Duration(0) {
+				mockVoiceConnection.EXPECT().Disconnect().Times(1)
+			}
+
+			hasStartedPlaying := false
+
+			mockVoiceState.EXPECT().GetUserID().Return(uID).AnyTimes()
+			mockVoiceState.EXPECT().GetChannelID().Return(cID).AnyTimes()
+			mockGuild.EXPECT().GetVoiceStates().Return([]discordinterface.DiscordVoiceState{mockVoiceState}).AnyTimes()
+			mockDiscordSession.EXPECT().Guild(gID).Return(mockGuild, nil).AnyTimes()
+			mockDiscordSession.EXPECT().User(uID).Return(mockUser, nil).AnyTimes()
+			mockUser.EXPECT().Bot().DoAndReturn(func() bool {
+				if !whenActivelyPlaying {
+					return true
+				}
+				return hasStartedPlaying
+			}).AnyTimes()
+
+			dms, err := discordplayer.NewDiscordMusicSessionEx(context.TODO(), mockDca, mockDiscordSession, 100*time.Millisecond,
+				&discordplayer.DiscordMusicSessionOptions{
+					GuildID:                    gID,
+					VoiceChannelID:             cID,
+					MediaQueueMaxSize:          10,
+					LeaveAfterChannelEmptyTime: leaveAfterChannelEmptyTime,
+				})
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(dms).NotTo(BeNil())
+
+			if whenActivelyPlaying {
+				Expect(dms.EnqueueMedia(mockMedia)).To(Succeed())
+			}
+
+			ctx, err := dms.Start()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ctx).NotTo(BeNil())
+
+			if whenActivelyPlaying {
+				Eventually(func() entities.Media {
+					return dms.GetCurrentlyPlayingMedia()
+				}).WithTimeout(2 * time.Second).WithPolling(50 * time.Millisecond).ShouldNot(BeNil())
+
+				hasStartedPlaying = true
+			}
+
+			if leaveAfterChannelEmptyTime == time.Duration(0) {
+				select {
+				case <-ctx.Done():
+					Fail("Voice worker exited even without leaveAfterChannelEmptyTime set")
+				case <-time.After(2 * time.Second):
+					return
+				}
+			} else {
+				select {
+				case <-ctx.Done():
+					return
+				case <-time.After(20 * time.Second):
+					Fail("Voice worker timed out")
+				}
+			}
+		},
+			Entry("When actively playing", true, 1*time.Second),
+			Entry("When idling", false, 1*time.Second),
+			Entry("When not setting leaveAfterChannelEmptyTime", true, time.Duration(0)),
+		)
 	})
 })
