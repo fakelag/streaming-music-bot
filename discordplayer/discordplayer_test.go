@@ -371,14 +371,14 @@ var _ = Describe("Discord Player", func() {
 				return playerContext.dms.GetCurrentlyPlayingMedia()
 			}).WithTimeout(5 * time.Second).WithPolling(50 * time.Millisecond).Should(BeNil())
 
-			err := playerContext.dms.Repeat()
+			err := playerContext.dms.Replay()
 			Expect(err).NotTo(HaveOccurred())
 
 			Eventually(func() entities.Media {
 				return playerContext.dms.GetCurrentlyPlayingMedia()
 			}).WithTimeout(5 * time.Second).WithPolling(50 * time.Millisecond).ShouldNot(BeNil())
 
-			err = playerContext.dms.Repeat()
+			err = playerContext.dms.Replay()
 			Expect(err).NotTo(HaveOccurred())
 
 			// Done done to first repeat
@@ -745,7 +745,7 @@ var _ = Describe("Discord Player", func() {
 			mockPlaylist.AddMedia(NewMockMedia(secondMediaTitle, secondMediaURL))
 
 			Expect(playerContext.dms.GetCurrentPlaylist()).To(BeNil())
-			playerContext.dms.StartPlaylist(mockPlaylist)
+			playerContext.dms.SetPlaylist(mockPlaylist)
 			_, err := playerContext.dms.Start()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(playerContext.dms.GetCurrentPlaylist()).NotTo(BeNil())
@@ -824,7 +824,7 @@ var _ = Describe("Discord Player", func() {
 			mockPlaylist := NewMockPlaylist()
 			mockPlaylist.AddMedia(playerContext.mockMedia)
 			mockPlaylist.AddMedia(NewMockMedia(thirdMediaTitle, thirdMediaURL))
-			playerContext.dms.StartPlaylist(mockPlaylist)
+			playerContext.dms.SetPlaylist(mockPlaylist)
 			_, err := playerContext.dms.Start()
 			Expect(err).NotTo(HaveOccurred())
 

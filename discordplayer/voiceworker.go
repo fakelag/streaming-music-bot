@@ -67,7 +67,7 @@ workerloop:
 			break workerloop
 		case <-ctx.Done():
 			break workerloop
-		case <-dms.chanRepeatCommand:
+		case <-dms.chanReplayCommand:
 			dms.mutex.RLock()
 			repeatMedia := dms.lastCompletedMedia
 			dms.mutex.RUnlock()
@@ -280,7 +280,7 @@ func (dms *DiscordMusicSession) disconnectAndExitWorker() {
 
 	close(dms.chanJumpCommand)
 	close(dms.chanLeaveCommand)
-	close(dms.chanRepeatCommand)
+	close(dms.chanReplayCommand)
 	close(dms.chanSkipCommand)
 
 	dms.workerActive = false

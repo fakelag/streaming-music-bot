@@ -57,7 +57,7 @@ type DiscordMusicSession struct {
 	workerActive      bool
 	chanLeaveCommand  chan bool
 	chanSkipCommand   chan bool
-	chanRepeatCommand chan bool
+	chanReplayCommand chan bool
 	chanJumpCommand   chan time.Duration
 }
 
@@ -125,7 +125,7 @@ func (dms *DiscordMusicSession) EnqueueMedia(media entities.Media) error {
 	return nil
 }
 
-func (dms *DiscordMusicSession) StartPlaylist(playlist entities.Playlist) {
+func (dms *DiscordMusicSession) SetPlaylist(playlist entities.Playlist) {
 	dms.mutex.Lock()
 	defer dms.mutex.Unlock()
 	dms.currentPlaylist = playlist
@@ -146,7 +146,7 @@ func (dms *DiscordMusicSession) Start() (context.Context, error) {
 
 	dms.chanLeaveCommand = make(chan bool, 1)
 	dms.chanSkipCommand = make(chan bool, 1)
-	dms.chanRepeatCommand = make(chan bool, 1)
+	dms.chanReplayCommand = make(chan bool, 1)
 	dms.chanJumpCommand = make(chan time.Duration, 1)
 
 	workerCtx, cancel := context.WithCancel(dms.parentCtx)
@@ -212,8 +212,8 @@ func (dms *DiscordMusicSession) ClearMediaQueue() bool {
 	return true
 }
 
-func (dms *DiscordMusicSession) Repeat() error {
-	err := dms.sendCommand(dms.chanRepeatCommand)
+func (dms *DiscordMusicSession) Replay() error {
+	err := dms.sendCommand(dms.chanReplayCommand)
 
 	if err == nil {
 		return nil
