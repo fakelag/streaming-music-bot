@@ -12,7 +12,10 @@ This is a library for creating discord music bots. It can be used to bootstrap a
 mockgen -source=discordplayer/interfaces/dcainterface.go -destination discordplayer/mocks/dcainterface_mock.go \
 mockgen -source=discordplayer/interfaces/discordvoiceinterface.go -destination discordplayer/mocks/discordvoiceinterface_mock.go \
 mockgen -source=discordplayer/interfaces/discordsessioninterface.go -destination discordplayer/mocks/discordsessioninterface_mock.go \
-mockgen -source=discordplayer/interfaces/dcastreamingsessioninterface.go -destination discordplayer/mocks/dcastreamingsessioninterface_mock.go
+mockgen -source=discordplayer/interfaces/dcastreamingsessioninterface.go -destination discordplayer/mocks/dcastreamingsessioninterface_mock.go \
+mockgen -source=discordplayer/interfaces/discordguildinterface.go -destination discordplayer/mocks/discordguildinterface_mock.go \
+mockgen -source=discordplayer/interfaces/discordvoicestateinterface.go -destination discordplayer/mocks/discordvoicestateinterface_mock.go \
+mockgen -source=discordplayer/interfaces/discorduserinterface.go -destination discordplayer/mocks/discorduserinterface_mock.go
 ```
 ### Running tests
 Test suite can be run with ginkgo
