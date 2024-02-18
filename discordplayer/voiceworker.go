@@ -318,6 +318,10 @@ func (dms *DiscordMusicSession) hasNonBotMembersInVoiceChannel(voiceChannelID st
 		return false, err
 	}
 
+	if guild == nil {
+		return false, errors.New("guild not found")
+	}
+
 	voiceStates := guild.GetVoiceStates()
 
 	hasNonBotMembersInVC := false

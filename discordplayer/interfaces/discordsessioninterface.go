@@ -25,13 +25,13 @@ func (dds *DefaultDiscordSession) ChannelVoiceJoin(gID string, cID string, mute 
 }
 
 func (dds *DefaultDiscordSession) Guild(gID string) (guild DiscordGuild, err error) {
-	g, err := dds.session.Guild(gID)
-
-	if err != nil {
-		return nil, err
+	for _, guild := range dds.session.State.Guilds {
+		if guild.ID == gID {
+			return NewDiscordGuild(guild), nil
+		}
 	}
 
-	return NewDiscordGuild(g), err
+	return nil, nil
 }
 
 func (dds *DefaultDiscordSession) User(uID string) (user DiscordUser, err error) {
