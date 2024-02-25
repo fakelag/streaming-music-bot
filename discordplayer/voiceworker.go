@@ -278,31 +278,50 @@ func (dms *DiscordMusicSession) checkDiscordVoiceConnection() error {
 func (dms *DiscordMusicSession) voiceWorkerContext() (ctx context.Context, cancel context.CancelFunc) {
 	ctx, cancel = context.WithCancel(dms.workerCtx)
 
-	if dms.leaveAfterChannelEmptyTime == time.Duration(0) {
+	checkChannelEmpty := dms.leaveAfterChannelEmptyTime != time.Duration(0)
+	checkQueueEmpty := dms.leaveAfterEmptyQueueTime != time.Duration(0)
+
+	if !checkChannelEmpty && !checkQueueEmpty {
 		return
 	}
 
 	dms.mutex.RLock()
+	// TODO - Get voice channel from dms.voiceConnection instead during the loop
+	// to check current channel in the case bot was switched
 	voiceChannelID := dms.voiceChannelID
 	dms.mutex.RUnlock()
 
 	go func() {
 		channelNotEmptyAt := time.Now()
+		queueNotEmptyAt := time.Now()
 
 		for {
-			hasNonBotMembers, err := dms.hasNonBotMembersInVoiceChannel(voiceChannelID)
+			if checkQueueEmpty {
+				currentMedia := dms.GetCurrentlyPlayingMedia()
 
-			if err != nil || hasNonBotMembers {
-				channelNotEmptyAt = time.Now()
-			} else if time.Since(channelNotEmptyAt) >= dms.leaveAfterChannelEmptyTime {
-				cancel()
-				return
+				if currentMedia != nil {
+					queueNotEmptyAt = time.Now()
+				} else if time.Since(queueNotEmptyAt) >= dms.leaveAfterEmptyQueueTime {
+					cancel()
+					return
+				}
+			}
+
+			if checkChannelEmpty {
+				hasNonBotMembers, err := dms.hasNonBotMembersInVoiceChannel(voiceChannelID)
+
+				if err != nil || hasNonBotMembers {
+					channelNotEmptyAt = time.Now()
+				} else if time.Since(channelNotEmptyAt) >= dms.leaveAfterChannelEmptyTime {
+					cancel()
+					return
+				}
 			}
 
 			select {
 			case <-ctx.Done():
 				return
-			case <-time.After(dms.leaveAfterChannelEmptyTimeInterval):
+			case <-time.After(dms.leaveAfterCheckInterval):
 				break
 			}
 		}

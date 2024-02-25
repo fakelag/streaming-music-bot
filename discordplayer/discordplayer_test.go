@@ -190,7 +190,8 @@ func JoinMockVoiceChannelAndPlayEx(
 		GuildID:                    gID,
 		VoiceChannelID:             cID,
 		MediaQueueMaxSize:          10,
-		LeaveAfterChannelEmptyTime: 1 * time.Second,
+		LeaveAfterChannelEmptyTime: 5 * time.Second,
+		LeaveAfterEmptyQueueTime:   5 * time.Second,
 	})
 
 	Expect(err).NotTo(HaveOccurred())
@@ -1429,8 +1430,8 @@ var _ = Describe("Discord Player", func() {
 		})
 	})
 
-	When("Bot is left alone in the voice channel", func() {
-		DescribeTable("Leaves the channel after given timeout if leaveAfterChannelEmptyTime is set", func(
+	When("Bot should leave by itself", func() {
+		DescribeTable("Leaves the channel after given timeout if channel is empty and LeaveAfterChannelEmptyTime is set", func(
 			whenActivelyPlaying bool,
 			leaveAfterChannelEmptyTime time.Duration,
 		) {
@@ -1497,7 +1498,7 @@ var _ = Describe("Discord Player", func() {
 			if leaveAfterChannelEmptyTime == time.Duration(0) {
 				select {
 				case <-ctx.Done():
-					Fail("Voice worker exited even without leaveAfterChannelEmptyTime set")
+					Fail("Voice worker exited without leaveAfterChannelEmptyTime set")
 				case <-time.After(2 * time.Second):
 					return
 				}
@@ -1513,6 +1514,49 @@ var _ = Describe("Discord Player", func() {
 			Entry("When actively playing", true, 1*time.Second),
 			Entry("When idling", false, 1*time.Second),
 			Entry("When not setting leaveAfterChannelEmptyTime", true, time.Duration(0)),
+		)
+
+		DescribeTable("Leaves the channel after given timeout when not playing and LeaveAfterEmptyQueueTime is set", func(
+			leaveAfterEmptyQueueTime time.Duration,
+		) {
+			ctrl := gomock.NewController(GinkgoT())
+
+			mockDca := NewMockDiscordAudio(ctrl)
+			mockDiscordSession := NewMockDiscordSession(ctrl)
+
+			dms, err := discordplayer.NewDiscordMusicSessionEx(context.TODO(), mockDca, mockDiscordSession, 100*time.Millisecond,
+				&discordplayer.DiscordMusicSessionOptions{
+					GuildID:                  gID,
+					VoiceChannelID:           cID,
+					MediaQueueMaxSize:        10,
+					LeaveAfterEmptyQueueTime: leaveAfterEmptyQueueTime,
+				})
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(dms).NotTo(BeNil())
+
+			ctx, err := dms.Start()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ctx).NotTo(BeNil())
+
+			if leaveAfterEmptyQueueTime == time.Duration(0) {
+				select {
+				case <-ctx.Done():
+					Fail("Voice worker exited without leaveAfterChannelEmptyTime set")
+				case <-time.After(2 * time.Second):
+					return
+				}
+			} else {
+				select {
+				case <-ctx.Done():
+					return
+				case <-time.After(20 * time.Second):
+					Fail("Voice worker timed out")
+				}
+			}
+		},
+			Entry("When idling", 1*time.Second),
+			Entry("When not setting LeaveAfterEmptyQueueTime", time.Duration(0)),
 		)
 	})
 })

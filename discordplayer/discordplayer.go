@@ -34,11 +34,12 @@ type DiscordMusicSession struct {
 	mutex sync.RWMutex
 
 	// Static fields, unlocked access
-	guildID                            string
-	discordSession                     DiscordSession
-	leaveAfterChannelEmptyTime         time.Duration
-	leaveAfterChannelEmptyTimeInterval time.Duration
-	parentCtx                          context.Context
+	guildID                    string
+	discordSession             DiscordSession
+	leaveAfterEmptyQueueTime   time.Duration
+	leaveAfterChannelEmptyTime time.Duration
+	leaveAfterCheckInterval    time.Duration
+	parentCtx                  context.Context
 
 	// Worker fields, unlocked access in worker goroutine
 	dca             DiscordAudio
@@ -69,9 +70,12 @@ type DiscordMusicSessionOptions struct {
 	// Max number of media that is able to be queued up. Default 100
 	// Does not apply to playlists
 	MediaQueueMaxSize int
-	// Number of time before automatically exiting if the current voice channel
+	// Amount of time before automatically exiting if the current voice channel
 	// is empty. Members are checked every 10 seconds. Pass 0 to stay forever. Defaults to 0
 	LeaveAfterChannelEmptyTime time.Duration
+	// Amount of time before automatically exiting when the bot has not been playing.
+	// Checked every 10s. Pass 0 to stay forever. Defaults to 0
+	LeaveAfterEmptyQueueTime time.Duration
 }
 
 func NewDiscordMusicSession(
@@ -92,7 +96,7 @@ func NewDiscordMusicSessionEx(
 	ctx context.Context,
 	dca DiscordAudio,
 	discord DiscordSession,
-	checkChannelEmptyInterval time.Duration,
+	leaveAfterCheckInterval time.Duration,
 	options *DiscordMusicSessionOptions,
 ) (*DiscordMusicSession, error) {
 	queueMaxSize := options.MediaQueueMaxSize
@@ -102,19 +106,20 @@ func NewDiscordMusicSessionEx(
 	}
 
 	dms := &DiscordMusicSession{
-		guildID:                            options.GuildID,
-		voiceChannelID:                     options.VoiceChannelID,
-		voiceConnection:                    nil,
-		leaveAfterChannelEmptyTime:         options.LeaveAfterChannelEmptyTime,
-		leaveAfterChannelEmptyTimeInterval: checkChannelEmptyInterval,
-		discordSession:                     discord,
-		dca:                                dca,
-		workerCtx:                          nil,
-		parentCtx:                          ctx,
-		mediaQueue:                         make([]entities.Media, 0),
-		mediaQueueMaxSize:                  options.MediaQueueMaxSize,
-		nextMediaCallbacks:                 make([]NextMediaCallback, 0),
-		errorCallbacks:                     make([]ErrorCallback, 0),
+		guildID:                    options.GuildID,
+		voiceChannelID:             options.VoiceChannelID,
+		voiceConnection:            nil,
+		leaveAfterEmptyQueueTime:   options.LeaveAfterEmptyQueueTime,
+		leaveAfterChannelEmptyTime: options.LeaveAfterChannelEmptyTime,
+		leaveAfterCheckInterval:    leaveAfterCheckInterval,
+		discordSession:             discord,
+		dca:                        dca,
+		workerCtx:                  nil,
+		parentCtx:                  ctx,
+		mediaQueue:                 make([]entities.Media, 0),
+		mediaQueueMaxSize:          options.MediaQueueMaxSize,
+		nextMediaCallbacks:         make([]NextMediaCallback, 0),
+		errorCallbacks:             make([]ErrorCallback, 0),
 	}
 
 	return dms, nil
