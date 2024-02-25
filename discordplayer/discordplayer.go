@@ -228,26 +228,35 @@ func (dms *DiscordMusicSession) ClearMediaQueue() bool {
 	return true
 }
 
-func (dms *DiscordMusicSession) Replay() error {
+// Sets current media to be replayed once after its done playing, or
+// enqueues+starts the last finished song if allowRejoin is true. Returned context is
+// non-nil if the worker is restarted & the bot rejoins voice
+func (dms *DiscordMusicSession) Replay(allowRejoin bool) (context.Context, error) {
 	err := dms.sendCommand(dms.chanReplayCommand)
 
 	if err == nil {
-		return nil
+		return nil, nil
 	}
 
-	if errors.Is(err, ErrorWorkerNotActive) {
+	if allowRejoin && errors.Is(err, ErrorWorkerNotActive) {
 		dms.mutex.RLock()
 		lastCompletedMedia := dms.lastCompletedMedia
 		dms.mutex.RUnlock()
 
 		if lastCompletedMedia == nil {
-			return ErrorNoMediaFound
+			return nil, ErrorNoMediaFound
 		}
 
-		return dms.EnqueueMedia(lastCompletedMedia)
+		err = dms.EnqueueMedia(lastCompletedMedia)
+
+		if err != nil {
+			return nil, err
+		}
+
+		return dms.Start()
 	}
 
-	return err
+	return nil, err
 }
 
 func (dms *DiscordMusicSession) SetPaused(paused bool) error {
@@ -369,6 +378,12 @@ func (dms *DiscordMusicSession) GetVoiceChannelID() string {
 
 func (dms *DiscordMusicSession) GetGuildID() string {
 	return dms.guildID
+}
+
+func (dms *DiscordMusicSession) IsWorkerActive() bool {
+	dms.mutex.RLock()
+	defer dms.mutex.RUnlock()
+	return dms.workerActive
 }
 
 func (dms *DiscordMusicSession) sendCommand(command chan bool) error {

@@ -368,7 +368,7 @@ var _ = Describe("Discord Player", func() {
 			}
 		})
 
-		It("Repeats the current media upon receiving repeat command", func() {
+		It("Repeats the current media upon receiving repeat command when the worker is active", func() {
 			ctrl := gomock.NewController(GinkgoT())
 
 			currentMediaDone := make(chan error)
@@ -377,6 +377,10 @@ var _ = Describe("Discord Player", func() {
 			playerContext.mockVoiceConnection.EXPECT().IsReady().Return(true).AnyTimes()
 			playerContext.mockDca.EXPECT().EncodeFile(playerContext.mockMedia.FileURL(), gomock.Any()).Return(nil, nil).AnyTimes()
 
+			Eventually(func() entities.Media {
+				return playerContext.dms.GetCurrentlyPlayingMedia()
+			}).WithTimeout(failTimeout).WithPolling(50 * time.Millisecond).ShouldNot(BeNil())
+
 			// Done to current media
 			currentMediaDone <- nil
 
@@ -384,20 +388,91 @@ var _ = Describe("Discord Player", func() {
 				return playerContext.dms.GetCurrentlyPlayingMedia()
 			}).WithTimeout(failTimeout).WithPolling(50 * time.Millisecond).Should(BeNil())
 
-			err := playerContext.dms.Replay()
+			_, err := playerContext.dms.Replay(false)
 			Expect(err).NotTo(HaveOccurred())
 
 			Eventually(func() entities.Media {
 				return playerContext.dms.GetCurrentlyPlayingMedia()
 			}).WithTimeout(failTimeout).WithPolling(50 * time.Millisecond).ShouldNot(BeNil())
 
-			err = playerContext.dms.Replay()
+			_, err = playerContext.dms.Replay(false)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Done done to first repeat
 			currentMediaDone <- nil
 
 			// Done to second repeat
+			currentMediaDone <- nil
+
+			Eventually(func() entities.Media {
+				return playerContext.dms.GetCurrentlyPlayingMedia()
+			}).WithTimeout(failTimeout).WithPolling(50 * time.Millisecond).Should(BeNil())
+
+			c := make(chan struct{})
+
+			playerContext.mockVoiceConnection.EXPECT().Disconnect().Do(func() {
+				close(currentMediaDone)
+				close(c)
+			})
+
+			Expect(playerContext.dms.Leave()).To(Succeed())
+
+			select {
+			case <-c:
+				return
+			case <-time.After(20 * time.Second):
+				Fail("Voice worker timed out")
+			}
+		})
+
+		It("Repeats the current media upon receiving repeat command when the worker is not active", func() {
+			ctrl := gomock.NewController(GinkgoT())
+
+			currentMediaDone := make(chan error)
+			mockDcaStreamingSession := NewMockDcaStreamingSession(ctrl)
+			playerContext := JoinMockVoiceChannelAndPlayEx(context.TODO(), ctrl, currentMediaDone, false, mockDcaStreamingSession)
+			playerContext.mockVoiceConnection.EXPECT().Speaking(gomock.Any()).AnyTimes()
+			playerContext.mockVoiceConnection.EXPECT().IsReady().Return(true).AnyTimes()
+			playerContext.mockDiscordSession.EXPECT().
+				ChannelVoiceJoin(playerContext.guildID, playerContext.channelID, false, false).
+				Return(playerContext.mockVoiceConnection, nil)
+			playerContext.mockDca.EXPECT().EncodeFile(playerContext.mockMedia.FileURL(), gomock.Any()).Return(nil, nil).AnyTimes()
+			playerContext.mockVoiceConnection.EXPECT().Disconnect()
+
+			_, err := playerContext.dms.Replay(true)
+			Expect(err).To(MatchError(discordplayer.ErrorNoMediaFound))
+
+			Expect(playerContext.dms.EnqueueMedia(playerContext.mockMedia)).NotTo(HaveOccurred())
+
+			_, err = playerContext.dms.Start()
+			Expect(err).NotTo(HaveOccurred())
+
+			Eventually(func() entities.Media {
+				return playerContext.dms.GetCurrentlyPlayingMedia()
+			}).WithTimeout(failTimeout).WithPolling(50 * time.Millisecond).ShouldNot(BeNil())
+
+			currentMediaDone <- nil
+			Expect(playerContext.dms.Leave()).To(Succeed())
+
+			Eventually(func() bool {
+				return playerContext.dms.IsWorkerActive()
+			}).WithTimeout(failTimeout).WithPolling(50 * time.Millisecond).Should(BeFalse())
+
+			_, err = playerContext.dms.Replay(false)
+			Expect(err).Should(MatchError(discordplayer.ErrorWorkerNotActive))
+
+			newCtx, err := playerContext.dms.Replay(true)
+			Expect(err).ShouldNot(HaveOccurred())
+			Expect(newCtx).NotTo(BeNil())
+
+			Eventually(func() bool {
+				return playerContext.dms.IsWorkerActive()
+			}).WithTimeout(failTimeout).WithPolling(50 * time.Millisecond).Should(BeTrue())
+
+			Eventually(func() entities.Media {
+				return playerContext.dms.GetCurrentlyPlayingMedia()
+			}).WithTimeout(failTimeout).WithPolling(50 * time.Millisecond).ShouldNot(BeNil())
+
 			currentMediaDone <- nil
 
 			Eventually(func() entities.Media {
@@ -1597,15 +1672,25 @@ var _ = Describe("Discord Player", func() {
 	When("Using the API invalidly", func() {
 		It("Returns a sensible error if attempting to Start() without a voice channel", func() {
 			dms, err := discordplayer.NewDiscordMusicSession(context.TODO(), nil, &discordplayer.DiscordMusicSessionOptions{
-				GuildID:           gID,
-				VoiceChannelID:    "",
-				MediaQueueMaxSize: 10,
+				GuildID:        gID,
+				VoiceChannelID: "",
 			})
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(dms).NotTo(BeNil())
 			_, err = dms.Start()
 			Expect(err).To(MatchError(discordplayer.ErrorNoVoiceChannelSet))
+		})
+
+		It("Returns a sensible error if attempting to EnqueueMedia() with a nil interface", func() {
+			dms, err := discordplayer.NewDiscordMusicSession(context.TODO(), nil, &discordplayer.DiscordMusicSessionOptions{
+				GuildID:        gID,
+				VoiceChannelID: "",
+			})
+
+			Expect(dms).NotTo(BeNil())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(dms.EnqueueMedia(nil)).To(MatchError(discordplayer.ErrorInvalidMedia))
 		})
 	})
 })

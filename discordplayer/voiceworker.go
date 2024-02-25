@@ -74,6 +74,7 @@ workerloop:
 			dms.mutex.RUnlock()
 
 			if repeatMedia != nil {
+				// TODO repeat from from start of the queue
 				dms.EnqueueMedia(repeatMedia)
 			}
 		default:
@@ -383,12 +384,6 @@ func (dms *DiscordMusicSession) disconnectAndExitWorker() {
 		dms.voiceConnection.Disconnect()
 		dms.voiceConnection = nil
 	}
-}
-
-func (dms *DiscordMusicSession) isWorkerActive() bool {
-	dms.mutex.RLock()
-	defer dms.mutex.RUnlock()
-	return dms.workerActive
 }
 
 func (dms *DiscordMusicSession) setCurrentlyPlayingMediaAndSession(media entities.Media, session *DcaMediaSession) {
