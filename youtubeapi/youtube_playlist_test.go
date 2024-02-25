@@ -53,6 +53,9 @@ var _ = Describe("YT Playlists", func() {
 			Expect(playList.Link()).To(Equal("listurl"))
 			Expect(playList.GetDurationLeft()).NotTo(BeNil())
 			Expect(*playList.GetDurationLeft()).To(Equal(60 * time.Second))
+			Expect(playList.GetAvailableConsumeOrders()).To(
+				ContainElements([]entities.PlaylistConsumeOrder{entities.ConsumeOrderFromStart, entities.ConsumeOrderShuffle}),
+			)
 
 			media, err := playList.ConsumeNextMedia()
 			Expect(err).ToNot(HaveOccurred())
@@ -141,6 +144,12 @@ var _ = Describe("YT Playlists", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(media).NotTo(BeNil())
 			Expect(playList.GetMediaCount()).To(Equal(2))
+		})
+
+		It("Gives sensible errors when attempting to configure playlist invalidly", func() {
+			playList := NewPlaylistWithMedia()
+			Expect(playList.SetConsumeOrder(entities.PlaylistConsumeOrder("nonexistent_consume_order"))).
+				To(MatchError(entities.ErrorConsumeOrderNotSupported))
 		})
 	})
 })

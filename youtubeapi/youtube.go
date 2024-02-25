@@ -3,7 +3,6 @@ package youtubeapi
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"math/rand"
 	"net/url"
 	"os/exec"
@@ -14,7 +13,13 @@ import (
 
 	cmd "github.com/fakelag/streaming-music-bot/command"
 	"github.com/fakelag/streaming-music-bot/entities"
-	"github.com/fakelag/streaming-music-bot/utils"
+)
+
+var (
+	ErrorUnrecognisedObject = errors.New("unrecognised object type")
+	ErrorInvalidYtdlpData   = errors.New("invalid ytdlp data")
+	ErrorNoVideoFound       = errors.New("no video found")
+	ErrorNoPlaylistFound    = errors.New("no playlist found")
 )
 
 type YtDlpObject struct {
@@ -124,17 +129,13 @@ func (yt *Youtube) GetYoutubeMedia(videoIdOrSearchTerm string) (*YoutubeMedia, e
 	}
 
 	if len(stdout) == 0 {
-		return nil, errors.New("No video found")
+		return nil, ErrorNoVideoFound
 	}
 
 	urlAndJson := strings.Split(stdout, "\n")
 
 	if len(urlAndJson) < 2 {
-		firstString := ""
-		if len(urlAndJson) > 0 {
-			firstString = urlAndJson[0]
-		}
-		return nil, errors.New(fmt.Sprintf("Invalid video json data: %s", utils.TruncateString(firstString, 50, "...")))
+		return nil, ErrorInvalidYtdlpData
 	}
 
 	videoStreamURL := urlAndJson[0]
@@ -175,7 +176,7 @@ func (yt *Youtube) GetYoutubeMedia(videoIdOrSearchTerm string) (*YoutubeMedia, e
 
 		return media, nil
 	} else {
-		return nil, errors.New(fmt.Sprintf("Unrecognised object type %s", object.Type))
+		return nil, ErrorUnrecognisedObject
 	}
 }
 
@@ -216,7 +217,7 @@ func (yt *Youtube) GetYoutubePlaylist(playlistIdOrUrl string) (*YoutubePlaylist,
 	}
 
 	if len(playlistJson) == 0 {
-		return nil, errors.New("No playlist found")
+		return nil, ErrorNoPlaylistFound
 	}
 
 	var object YtDlpObject
@@ -225,7 +226,7 @@ func (yt *Youtube) GetYoutubePlaylist(playlistIdOrUrl string) (*YoutubePlaylist,
 	}
 
 	if object.Type != "playlist" {
-		return nil, errors.New(fmt.Sprintf("Unrecognised object type %s", object.Type))
+		return nil, ErrorUnrecognisedObject
 	}
 
 	var ytDlpPlaylist YtDlpPlayList

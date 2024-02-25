@@ -70,5 +70,9 @@ func (ytm *YoutubeMedia) IsLiveStream() bool {
 	return ytm.VideoIsLiveStream
 }
 
+func (ytm *YoutubeMedia) SetYtAPI(ytAPI *Youtube) {
+	ytm.ytAPI = ytAPI
+}
+
 // Verify implements entities.Media
 var _ entities.Media = (*YoutubeMedia)(nil)

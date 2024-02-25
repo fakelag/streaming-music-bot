@@ -1,41 +1,17 @@
 package youtubeapi_test
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/fakelag/streaming-music-bot/entities"
+	"github.com/fakelag/streaming-music-bot/testutils"
 	"github.com/fakelag/streaming-music-bot/youtubeapi"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
-
-type MockCommandExecutor struct {
-	MockStdoutResult string
-	MockExitCode     int
-}
-
-func (command *MockCommandExecutor) RunCommandWithTimeout(
-	executable string,
-	timeout time.Duration,
-	args ...string,
-) (chan *string, chan error) {
-	resultChannel := make(chan *string, 1)
-	errorChannel := make(chan error, 1)
-
-	go func() {
-		if command.MockExitCode != 0 {
-			errorChannel <- errors.New(fmt.Sprintf("exit status %d", command.MockExitCode))
-		} else {
-			resultChannel <- &command.MockStdoutResult
-		}
-	}()
-
-	return resultChannel, errorChannel
-}
 
 var mockVideoJson string = strings.ReplaceAll(`{
 	"id": "123",
@@ -70,8 +46,13 @@ var mockPlaylistJson string = strings.ReplaceAll(`{
 			"thumbnails": [
 				{
 					"url": "thumbnail1234",
-					"preference": 0,
-					"id": "0"
+					"height": 32,
+					"width": 32
+				},
+				{
+					"url": "thumbnail1234",
+					"height": 64,
+					"width": 64
 				}
 			]
 		},
@@ -84,8 +65,8 @@ var mockPlaylistJson string = strings.ReplaceAll(`{
 			"thumbnails": [
 				{
 					"url": "thumbnail1234",
-					"preference": 0,
-					"id": "0"
+					"height": 64,
+					"width": 64
 				}
 			]
 		}
@@ -96,7 +77,7 @@ var mockPlaylistJson string = strings.ReplaceAll(`{
 var _ = Describe("YT Download", func() {
 	When("Downloading a singular video", func() {
 		It("Downloads a video stream URL from Youtube", func() {
-			mockExecutor := &MockCommandExecutor{
+			mockExecutor := &testutils.MockCommandExecutor{
 				MockStdoutResult: "url123\n" + mockVideoJson,
 			}
 
@@ -109,6 +90,13 @@ var _ = Describe("YT Download", func() {
 			Expect(media.Title()).To(Equal("Mock Title"))
 			Expect(media.FileURL()).To(Equal("url123"))
 			Expect(media.Thumbnail()).To(Equal("foo"))
+
+			mediaFromVideoLink, err := yt.GetYoutubeMedia("https://www.youtube.com/watch?v=foo")
+			Expect(err).To(BeNil())
+			Expect(mediaFromVideoLink.ID).To(Equal("123"))
+			Expect(mediaFromVideoLink.Title()).To(Equal("Mock Title"))
+			Expect(mediaFromVideoLink.FileURL()).To(Equal("url123"))
+			Expect(mediaFromVideoLink.Thumbnail()).To(Equal("foo"))
 		})
 
 		It("Parses stream expiration url correctly", func() {
@@ -117,7 +105,7 @@ var _ = Describe("YT Download", func() {
 				"https://manifest.googlevideo.com/api/manifest/hls_playlist/expire/" + fmt.Sprintf("%d", timeUnix) + "/ei&foo=bar\n",
 				"https://rr5---sn-qo5-ixas.googlevideo.com/videoplayback?expire=" + fmt.Sprintf("%d", timeUnix) + "&ei=123&foo=bar\n",
 			} {
-				mockExecutor := &MockCommandExecutor{
+				mockExecutor := &testutils.MockCommandExecutor{
 					MockStdoutResult: streamUrl + mockVideoJson,
 				}
 
@@ -133,7 +121,7 @@ var _ = Describe("YT Download", func() {
 		})
 
 		It("Fails with a sensible error if the download fails with an exit code", func() {
-			mockExecutor := &MockCommandExecutor{
+			mockExecutor := &testutils.MockCommandExecutor{
 				MockStdoutResult: "",
 				MockExitCode:     1,
 			}
@@ -145,8 +133,8 @@ var _ = Describe("YT Download", func() {
 			Expect(err).To(MatchError("exit status 1"))
 		})
 
-		It("Fails with a sensible error if the download fails due to invalid json", func() {
-			mockExecutor := &MockCommandExecutor{
+		It("Fails with a sensible error when receiving an invalid response from ytdlp", func() {
+			mockExecutor := &testutils.MockCommandExecutor{
 				MockStdoutResult: "url123\n{",
 			}
 
@@ -155,12 +143,27 @@ var _ = Describe("YT Download", func() {
 
 			_, err := yt.GetYoutubeMedia("foo")
 			Expect(err).To(MatchError("unexpected end of JSON input"))
+
+			mockExecutor.MockStdoutResult = "url123\n{}"
+
+			_, err = yt.GetYoutubeMedia("foo")
+			Expect(err).To(MatchError(youtubeapi.ErrorUnrecognisedObject))
+
+			mockExecutor.MockStdoutResult = "url123"
+
+			_, err = yt.GetYoutubeMedia("foo")
+			Expect(err).To(MatchError(youtubeapi.ErrorInvalidYtdlpData))
+
+			mockExecutor.MockStdoutResult = ""
+
+			_, err = yt.GetYoutubeMedia("foo")
+			Expect(err).To(MatchError(youtubeapi.ErrorNoVideoFound))
 		})
 	})
 
 	When("Downloading a playlist", func() {
 		It("Downloads a playlist & its videos", func() {
-			mockExecutor := &MockCommandExecutor{
+			mockExecutor := &testutils.MockCommandExecutor{
 				MockStdoutResult: mockPlaylistJson,
 			}
 
@@ -202,8 +205,8 @@ var _ = Describe("YT Download", func() {
 			Expect(ytMedia1.FileURL()).Should(Equal(""))
 		})
 
-		It("Fails with a sensible error if the download fails due to invalid json", func() {
-			mockExecutor := &MockCommandExecutor{
+		It("Fails with a sensible error when receiving an invalid response from ytdlp", func() {
+			mockExecutor := &testutils.MockCommandExecutor{
 				MockStdoutResult: "{",
 			}
 
@@ -212,6 +215,16 @@ var _ = Describe("YT Download", func() {
 
 			_, err := yt.GetYoutubePlaylist("foo")
 			Expect(err).To(MatchError("unexpected end of JSON input"))
+
+			mockExecutor.MockStdoutResult = "{\"_type\":\"something\"}"
+
+			_, err = yt.GetYoutubePlaylist("foo")
+			Expect(err).To(MatchError(youtubeapi.ErrorUnrecognisedObject))
+
+			mockExecutor.MockStdoutResult = ""
+
+			_, err = yt.GetYoutubePlaylist("foo")
+			Expect(err).To(MatchError(youtubeapi.ErrorNoPlaylistFound))
 		})
 	})
 })
