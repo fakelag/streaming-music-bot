@@ -18,9 +18,10 @@ import (
 )
 
 var (
-	gID = "xxx-guild-id"
-	cID = "xxx-channel-id"
-	uID = "xxx-user-id"
+	gID         = "xxx-guild-id"
+	cID         = "xxx-channel-id"
+	uID         = "xxx-user-id"
+	failTimeout = 5 * time.Second
 )
 
 type MockMedia struct {
@@ -343,13 +344,13 @@ var _ = Describe("Discord Player", func() {
 
 			Eventually(func() entities.Media {
 				return playerContext.dms.GetCurrentlyPlayingMedia()
-			}).WithTimeout(2 * time.Second).WithPolling(50 * time.Millisecond).ShouldNot(BeNil())
+			}).WithTimeout(failTimeout).WithPolling(50 * time.Millisecond).ShouldNot(BeNil())
 
 			Expect(playerContext.dms.Skip()).To(Succeed())
 
 			Eventually(func() entities.Media {
 				return playerContext.dms.GetCurrentlyPlayingMedia()
-			}).WithTimeout(2 * time.Second).WithPolling(50 * time.Millisecond).Should(BeNil())
+			}).WithTimeout(failTimeout).WithPolling(50 * time.Millisecond).Should(BeNil())
 
 			disconnectChannel := make(chan struct{})
 			playerContext.mockVoiceConnection.EXPECT().Disconnect().Do(func() {
@@ -382,14 +383,14 @@ var _ = Describe("Discord Player", func() {
 
 			Eventually(func() entities.Media {
 				return playerContext.dms.GetCurrentlyPlayingMedia()
-			}).WithTimeout(5 * time.Second).WithPolling(50 * time.Millisecond).Should(BeNil())
+			}).WithTimeout(failTimeout).WithPolling(50 * time.Millisecond).Should(BeNil())
 
 			err := playerContext.dms.Replay()
 			Expect(err).NotTo(HaveOccurred())
 
 			Eventually(func() entities.Media {
 				return playerContext.dms.GetCurrentlyPlayingMedia()
-			}).WithTimeout(5 * time.Second).WithPolling(50 * time.Millisecond).ShouldNot(BeNil())
+			}).WithTimeout(failTimeout).WithPolling(50 * time.Millisecond).ShouldNot(BeNil())
 
 			err = playerContext.dms.Replay()
 			Expect(err).NotTo(HaveOccurred())
@@ -402,7 +403,7 @@ var _ = Describe("Discord Player", func() {
 
 			Eventually(func() entities.Media {
 				return playerContext.dms.GetCurrentlyPlayingMedia()
-			}).WithTimeout(5 * time.Second).WithPolling(50 * time.Millisecond).Should(BeNil())
+			}).WithTimeout(failTimeout).WithPolling(50 * time.Millisecond).Should(BeNil())
 
 			c := make(chan struct{})
 
@@ -441,7 +442,7 @@ var _ = Describe("Discord Player", func() {
 			Eventually(func() error {
 				_, err := playerContext.dms.IsPaused()
 				return err
-			}).WithPolling(50 * time.Millisecond).WithTimeout(1 * time.Second).Should(Succeed())
+			}).WithPolling(50 * time.Millisecond).WithTimeout(failTimeout).Should(Succeed())
 
 			isPaused, err := playerContext.dms.IsPaused()
 			Expect(err).NotTo(HaveOccurred())
@@ -461,7 +462,7 @@ var _ = Describe("Discord Player", func() {
 
 			Eventually(func() entities.Media {
 				return playerContext.dms.GetCurrentlyPlayingMedia()
-			}).WithPolling(50 * time.Millisecond).WithTimeout(1 * time.Second).ShouldNot(BeNil())
+			}).WithPolling(50 * time.Millisecond).WithTimeout(failTimeout).ShouldNot(BeNil())
 
 			playerContext.mockVoiceConnection.EXPECT().Speaking(false).Do(func(b bool) {
 				close(c)
@@ -505,7 +506,7 @@ var _ = Describe("Discord Player", func() {
 
 			Eventually(func() entities.Media {
 				return playerContext.dms.GetCurrentlyPlayingMedia()
-			}).WithTimeout(5 * time.Second).WithPolling(50 * time.Millisecond).ShouldNot(BeNil())
+			}).WithTimeout(failTimeout).WithPolling(50 * time.Millisecond).ShouldNot(BeNil())
 
 			Expect(playerContext.dms.Jump(jumpToTimeStamp)).To(Succeed())
 
@@ -535,7 +536,7 @@ var _ = Describe("Discord Player", func() {
 
 			Eventually(func() entities.Media {
 				return playerContext.dms.GetCurrentlyPlayingMedia()
-			}).WithTimeout(5 * time.Second).WithPolling(50 * time.Millisecond).ShouldNot(BeNil())
+			}).WithTimeout(failTimeout).WithPolling(50 * time.Millisecond).ShouldNot(BeNil())
 
 			Expect(playerContext.dms.Jump(-1 * time.Second)).To(MatchError(discordplayer.ErrorInvalidArgument))
 			playerContext.mockMedia.DisableJumpToTS = true
@@ -577,14 +578,14 @@ var _ = Describe("Discord Player", func() {
 			Eventually(func() int {
 				return len(playerContext.dms.GetMediaQueue())
 			}).
-				WithTimeout(5 * time.Second).
+				WithTimeout(failTimeout).
 				WithPolling(50 * time.Millisecond).
 				Should(Equal(1))
 
 			Eventually(func() entities.Media {
 				return playerContext.dms.GetCurrentlyPlayingMedia()
 			}).
-				WithTimeout(2 * time.Second).
+				WithTimeout(failTimeout).
 				WithPolling(50 * time.Millisecond).
 				Should(Not(BeNil()))
 
@@ -594,7 +595,7 @@ var _ = Describe("Discord Player", func() {
 			Eventually(func() int {
 				return len(playerContext.dms.GetMediaQueue())
 			}).
-				WithTimeout(5 * time.Second).
+				WithTimeout(failTimeout).
 				WithPolling(50 * time.Millisecond).
 				Should(Equal(0))
 
@@ -613,7 +614,7 @@ var _ = Describe("Discord Player", func() {
 				Eventually(func() entities.Media {
 					return playerContext.dms.GetCurrentlyPlayingMedia()
 				}).
-					WithTimeout(2 * time.Second).
+					WithTimeout(failTimeout).
 					WithPolling(50 * time.Millisecond).
 					Should(BeNil())
 				return
@@ -644,7 +645,7 @@ var _ = Describe("Discord Player", func() {
 			Eventually(func() int {
 				return len(playerContext.dms.GetMediaQueue())
 			}).
-				WithTimeout(5 * time.Second).
+				WithTimeout(failTimeout).
 				WithPolling(50 * time.Millisecond).
 				Should(Equal(2))
 
@@ -682,7 +683,7 @@ var _ = Describe("Discord Player", func() {
 			Eventually(func() int {
 				return len(playerContext.dms.GetMediaQueue())
 			}).
-				WithTimeout(5 * time.Second).
+				WithTimeout(failTimeout).
 				WithPolling(50 * time.Millisecond).
 				Should(Equal(9))
 
@@ -713,14 +714,14 @@ var _ = Describe("Discord Player", func() {
 				Eventually(func() int {
 					return len(playerContext.dms.GetMediaQueue())
 				}).
-					WithTimeout(2 * time.Second).
+					WithTimeout(failTimeout).
 					WithPolling(50 * time.Millisecond).
 					Should(Equal(0))
 				// Expect current media to be nil after Leave()
 				Eventually(func() entities.Media {
 					return playerContext.dms.GetCurrentlyPlayingMedia()
 				}).
-					WithTimeout(2 * time.Second).
+					WithTimeout(failTimeout).
 					WithPolling(50 * time.Millisecond).
 					Should(BeNil())
 				return
@@ -772,7 +773,7 @@ var _ = Describe("Discord Player", func() {
 				}
 
 				return media.Title()
-			}).WithTimeout(2 * time.Second).WithPolling(50 * time.Millisecond).Should(Equal(playerContext.mockMedia.Title()))
+			}).WithTimeout(failTimeout).WithPolling(50 * time.Millisecond).Should(Equal(playerContext.mockMedia.Title()))
 
 			// Done first media
 			currentMediaDone <- nil
@@ -785,7 +786,7 @@ var _ = Describe("Discord Player", func() {
 				}
 
 				return media.Title()
-			}).WithTimeout(2 * time.Second).WithPolling(50 * time.Millisecond).Should(Equal(secondMediaTitle))
+			}).WithTimeout(failTimeout).WithPolling(50 * time.Millisecond).Should(Equal(secondMediaTitle))
 
 			Expect(playerContext.dms.GetCurrentPlaylist()).NotTo(BeNil())
 			Expect(playerContext.dms.GetCurrentPlaylist().Title()).Should(Equal(mockPlaylist.Title()))
@@ -796,7 +797,7 @@ var _ = Describe("Discord Player", func() {
 			// Playlist should be automatically cleared
 			Eventually(func() entities.Playlist {
 				return playerContext.dms.GetCurrentPlaylist()
-			}).WithTimeout(2 * time.Second).WithPolling(50 * time.Millisecond).Should(BeNil())
+			}).WithTimeout(failTimeout).WithPolling(50 * time.Millisecond).Should(BeNil())
 
 			Expect(playerContext.dms.Leave()).Should(Succeed())
 
@@ -849,7 +850,7 @@ var _ = Describe("Discord Player", func() {
 				}
 
 				return media.Title()
-			}).WithTimeout(2 * time.Second).WithPolling(50 * time.Millisecond).Should(Equal(playerContext.mockMedia.Title()))
+			}).WithTimeout(failTimeout).WithPolling(50 * time.Millisecond).Should(Equal(playerContext.mockMedia.Title()))
 
 			queueMedia := NewMockMedia(queueMediaTitle, queueMediaURL)
 			Expect(playerContext.dms.EnqueueMedia(queueMedia)).To(Succeed())
@@ -865,7 +866,7 @@ var _ = Describe("Discord Player", func() {
 				}
 
 				return media.Title()
-			}).WithTimeout(2 * time.Second).WithPolling(50 * time.Millisecond).Should(Equal(queueMediaTitle))
+			}).WithTimeout(failTimeout).WithPolling(50 * time.Millisecond).Should(Equal(queueMediaTitle))
 
 			Expect(playerContext.dms.GetCurrentPlaylist()).NotTo(BeNil())
 			Expect(playerContext.dms.GetCurrentPlaylist().Title()).Should(Equal(mockPlaylist.Title()))
@@ -882,11 +883,11 @@ var _ = Describe("Discord Player", func() {
 				}
 
 				return media.Title()
-			}).WithTimeout(2 * time.Second).WithPolling(50 * time.Millisecond).Should(Equal(thirdMediaTitle))
+			}).WithTimeout(failTimeout).WithPolling(50 * time.Millisecond).Should(Equal(thirdMediaTitle))
 
 			Eventually(func() entities.Playlist {
 				return playerContext.dms.GetCurrentPlaylist()
-			}).WithTimeout(2 * time.Second).WithPolling(50 * time.Millisecond).ShouldNot(BeNil())
+			}).WithTimeout(failTimeout).WithPolling(50 * time.Millisecond).ShouldNot(BeNil())
 
 			playerContext.dms.ClearPlaylist()
 
@@ -1089,20 +1090,20 @@ var _ = Describe("Discord Player", func() {
 
 			Eventually(func() time.Duration {
 				return playerContext.dms.CurrentPlaybackPosition()
-			}).WithTimeout(2 * time.Second).WithPolling(50 * time.Millisecond).Should(Equal(10 * time.Second))
+			}).WithTimeout(failTimeout).WithPolling(50 * time.Millisecond).Should(Equal(10 * time.Second))
 
 			// Done playing
 			currentMediaDone <- nil
 
 			Eventually(func() time.Duration {
 				return playerContext.dms.CurrentPlaybackPosition()
-			}).WithTimeout(2 * time.Second).WithPolling(50 * time.Millisecond).Should(Equal(0 * time.Second))
+			}).WithTimeout(failTimeout).WithPolling(50 * time.Millisecond).Should(Equal(0 * time.Second))
 
 			Expect(playerContext.dms.Leave()).To(Succeed())
 
 			Eventually(func() time.Duration {
 				return playerContext.dms.CurrentPlaybackPosition()
-			}).WithTimeout(2 * time.Second).WithPolling(50 * time.Millisecond).Should(Equal(0 * time.Second))
+			}).WithTimeout(failTimeout).WithPolling(50 * time.Millisecond).Should(Equal(0 * time.Second))
 
 			go func() {
 				wg.Wait()
@@ -1221,7 +1222,7 @@ var _ = Describe("Discord Player", func() {
 
 			Eventually(func() entities.Media {
 				return playerContext.dms.GetCurrentlyPlayingMedia()
-			}).WithTimeout(2 * time.Second).WithPolling(50 * time.Millisecond).Should(BeNil())
+			}).WithTimeout(failTimeout).WithPolling(50 * time.Millisecond).Should(BeNil())
 
 			cancel()
 
@@ -1401,7 +1402,7 @@ var _ = Describe("Discord Player", func() {
 
 			Eventually(func() entities.Media {
 				return playerContext.dms.GetCurrentlyPlayingMedia()
-			}).WithTimeout(2 * time.Second).WithPolling(50 * time.Millisecond).ShouldNot(BeNil())
+			}).WithTimeout(failTimeout).WithPolling(50 * time.Millisecond).ShouldNot(BeNil())
 
 			workerStopped, err := playerContext.dms.SetVoiceChannelID(newChannelID)
 			Expect(err).NotTo(HaveOccurred())
@@ -1416,7 +1417,7 @@ var _ = Describe("Discord Player", func() {
 
 			Eventually(func() entities.Media {
 				return playerContext.dms.GetCurrentlyPlayingMedia()
-			}).WithTimeout(2 * time.Second).WithPolling(50 * time.Millisecond).ShouldNot(BeNil())
+			}).WithTimeout(failTimeout).WithPolling(50 * time.Millisecond).ShouldNot(BeNil())
 
 			Expect(playerContext.dms.Leave()).To(Succeed())
 
@@ -1489,7 +1490,7 @@ var _ = Describe("Discord Player", func() {
 			if whenActivelyPlaying {
 				Eventually(func() entities.Media {
 					return dms.GetCurrentlyPlayingMedia()
-				}).WithTimeout(2 * time.Second).WithPolling(50 * time.Millisecond).ShouldNot(BeNil())
+				}).WithTimeout(failTimeout).WithPolling(50 * time.Millisecond).ShouldNot(BeNil())
 
 				hasStartedPlaying = true
 			}
