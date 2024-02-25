@@ -1,5 +1,5 @@
 ## Streaming music bot library for Discord
-![Coverage](https://img.shields.io/badge/Coverage-86.6%25-brightgreen)
+![Coverage](https://img.shields.io/badge/Coverage-91.3%25-brightgreen)
 
 This is a library for creating discord music bots. It can be used to bootstrap a new bot or added to an existing golang discord project. [discordgo](https://github.com/bwmarrin/discordgo) is used to interface with discord. There are built in features for most use-cases such as playing from youtube (using [ytdlp](https://github.com/yt-dlp/yt-dlp)), support for livestreams & playlists, extensive API for various commands like skip/replay/pause/jump/leave, etc. Goal of this project is to provide most common music bot functionality with a simple API that can be dropped into any discordgo project in a plug-and-play fashion.
 
