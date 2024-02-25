@@ -426,7 +426,7 @@ var _ = Describe("Discord Player", func() {
 
 			currentMediaDone := make(chan error)
 			mockDcaStreamingSession := NewMockDcaStreamingSession(ctrl)
-			playerContext := JoinMockVoiceChannelAndPlayEx(context.TODO(), ctrl, currentMediaDone, true, mockDcaStreamingSession)
+			playerContext := JoinMockVoiceChannelAndPlayEx(context.TODO(), ctrl, currentMediaDone, false, mockDcaStreamingSession)
 
 			mockIsPaused := false
 			mockDcaStreamingSession.EXPECT().SetPaused(gomock.Any()).Do(func(pause bool) {
@@ -435,6 +435,12 @@ var _ = Describe("Discord Player", func() {
 			mockDcaStreamingSession.EXPECT().Paused().DoAndReturn(func() bool {
 				return mockIsPaused
 			}).MinTimes(1)
+
+			Expect(playerContext.dms.SetPaused(true)).To(MatchError(discordplayer.ErrorNotStreaming))
+
+			Expect(playerContext.dms.EnqueueMedia(playerContext.mockMedia)).NotTo(HaveOccurred())
+			_, err := playerContext.dms.Start()
+			Expect(err).NotTo(HaveOccurred())
 
 			c := make(chan struct{})
 
@@ -522,7 +528,8 @@ var _ = Describe("Discord Player", func() {
 			ctrl := gomock.NewController(GinkgoT())
 
 			currentMediaDone := make(chan error)
-			playerContext := JoinMockVoiceChannelAndPlay(ctrl, currentMediaDone)
+			mockDcaStreamingSession := NewMockDcaStreamingSession(ctrl)
+			playerContext := JoinMockVoiceChannelAndPlayEx(context.TODO(), ctrl, currentMediaDone, false, mockDcaStreamingSession)
 
 			c := make(chan struct{})
 
@@ -532,6 +539,12 @@ var _ = Describe("Discord Player", func() {
 					close(c)
 				}),
 			)
+
+			Expect(playerContext.dms.Jump(30 * time.Second)).To(MatchError(discordplayer.ErrorNoMediaFound))
+
+			Expect(playerContext.dms.EnqueueMedia(playerContext.mockMedia)).NotTo(HaveOccurred())
+			_, err := playerContext.dms.Start()
+			Expect(err).NotTo(HaveOccurred())
 
 			Eventually(func() entities.Media {
 				return playerContext.dms.GetCurrentlyPlayingMedia()
@@ -1371,7 +1384,6 @@ var _ = Describe("Discord Player", func() {
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(dms).NotTo(BeNil())
-
 			Expect(dms.GetGuildID()).To(Equal(gID))
 			Expect(dms.GetVoiceChannelID()).To(Equal(cID))
 
@@ -1379,10 +1391,8 @@ var _ = Describe("Discord Player", func() {
 			workerStopped, err := dms.SetVoiceChannelID(newChannelID)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(workerStopped).To(BeFalse())
-
 			Expect(dms.GetGuildID()).To(Equal(gID))
 			Expect(dms.GetVoiceChannelID()).To(Equal(newChannelID))
-
 			Expect(dms.Leave()).To(MatchError(discordplayer.ErrorWorkerNotActive))
 		})
 
@@ -1406,7 +1416,6 @@ var _ = Describe("Discord Player", func() {
 			workerStopped, err := playerContext.dms.SetVoiceChannelID(newChannelID)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(workerStopped).To(BeTrue())
-
 			Expect(playerContext.dms.GetMediaQueue()).To(HaveLen(0))
 			Expect(playerContext.dms.EnqueueMedia(playerContext.mockMedia)).To(Succeed())
 
@@ -1426,6 +1435,32 @@ var _ = Describe("Discord Player", func() {
 			case <-time.After(20 * time.Second):
 				Fail("Voice worker timed out")
 			}
+		})
+
+		It("Does nothing if changing to the same voice channel", func() {
+			ctrl := gomock.NewController(GinkgoT())
+
+			mockDca := NewMockDiscordAudio(ctrl)
+			mockDiscordSession := NewMockDiscordSession(ctrl)
+
+			dms, err := discordplayer.NewDiscordMusicSessionEx(context.TODO(), mockDca, mockDiscordSession, 100*time.Millisecond,
+				&discordplayer.DiscordMusicSessionOptions{
+					GuildID:           gID,
+					VoiceChannelID:    cID,
+					MediaQueueMaxSize: 10,
+				})
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(dms).NotTo(BeNil())
+			Expect(dms.GetGuildID()).To(Equal(gID))
+			Expect(dms.GetVoiceChannelID()).To(Equal(cID))
+
+			workerStopped, err := dms.SetVoiceChannelID(cID)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(workerStopped).To(BeFalse())
+			Expect(dms.GetGuildID()).To(Equal(gID))
+			Expect(dms.GetVoiceChannelID()).To(Equal(cID))
+			Expect(dms.Leave()).To(MatchError(discordplayer.ErrorWorkerNotActive))
 		})
 	})
 
@@ -1557,5 +1592,20 @@ var _ = Describe("Discord Player", func() {
 			Entry("When idling", 1*time.Second),
 			Entry("When not setting LeaveAfterEmptyQueueTime", time.Duration(0)),
 		)
+	})
+
+	When("Using the API invalidly", func() {
+		It("Returns a sensible error if attempting to Start() without a voice channel", func() {
+			dms, err := discordplayer.NewDiscordMusicSession(context.TODO(), nil, &discordplayer.DiscordMusicSessionOptions{
+				GuildID:           gID,
+				VoiceChannelID:    "",
+				MediaQueueMaxSize: 10,
+			})
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(dms).NotTo(BeNil())
+			_, err = dms.Start()
+			Expect(err).To(MatchError(discordplayer.ErrorNoVoiceChannelSet))
+		})
 	})
 })
