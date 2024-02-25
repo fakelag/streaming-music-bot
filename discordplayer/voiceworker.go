@@ -11,7 +11,6 @@ import (
 	"github.com/fakelag/streaming-music-bot/entities"
 
 	"github.com/fakelag/dca"
-	. "github.com/onsi/ginkgo/v2"
 )
 
 type DcaMediaSession struct {
@@ -367,8 +366,6 @@ func (dms *DiscordMusicSession) hasNonBotMembersInVoiceChannel(voiceChannelID st
 }
 
 func (dms *DiscordMusicSession) disconnectAndExitWorker() {
-	defer GinkgoRecover()
-
 	dms.mutex.Lock()
 	defer dms.mutex.Unlock()
 
@@ -411,8 +408,6 @@ func (dms *DiscordMusicSession) cleanupEncodingAndVoiceSession(
 	encodingSession *dca.EncodeSession,
 	voiceConnection discordinterface.DiscordVoiceConnection,
 ) {
-	defer GinkgoRecover()
-
 	if encodingSession != nil {
 		encodingSession.Cleanup()
 	}
