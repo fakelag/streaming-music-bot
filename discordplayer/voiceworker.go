@@ -408,7 +408,6 @@ func (dms *DiscordMusicSession) cleanupEncodingAndVoiceSession(
 	encodingSession *dca.EncodeSession,
 	voiceConnection discordinterface.DiscordVoiceConnection,
 ) {
-
 	if encodingSession != nil {
 		encodingSession.Cleanup()
 	}

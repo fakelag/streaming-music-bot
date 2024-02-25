@@ -192,7 +192,6 @@ func JoinMockVoiceChannelAndPlayEx(
 		VoiceChannelID:             cID,
 		MediaQueueMaxSize:          10,
 		LeaveAfterChannelEmptyTime: 5 * time.Second,
-		LeaveAfterEmptyQueueTime:   5 * time.Second,
 	})
 
 	Expect(err).NotTo(HaveOccurred())
