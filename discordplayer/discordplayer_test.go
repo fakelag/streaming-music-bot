@@ -276,7 +276,6 @@ var _ = Describe("Discord Player", func() {
 			wg.Add(1)
 
 			go func() {
-				time.Sleep(1 * time.Second)
 				Expect(playerContext.dms.Leave()).To(Succeed())
 
 				wg.Wait()
@@ -315,7 +314,6 @@ var _ = Describe("Discord Player", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			go func() {
-				time.Sleep(1 * time.Second)
 				Expect(playerContext.dms.Leave()).To(Succeed())
 
 				wg.Wait()
@@ -461,15 +459,15 @@ var _ = Describe("Discord Player", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(isPaused).To(BeFalse())
 
-			go func() {
-				time.Sleep(1 * time.Second)
-				currentMediaDone <- nil
-				close(currentMediaDone)
-			}()
+			Eventually(func() entities.Media {
+				return playerContext.dms.GetCurrentlyPlayingMedia()
+			}).WithPolling(50 * time.Millisecond).WithTimeout(1 * time.Second).ShouldNot(BeNil())
 
 			playerContext.mockVoiceConnection.EXPECT().Speaking(false).Do(func(b bool) {
 				close(c)
 			})
+
+			close(currentMediaDone)
 
 			select {
 			case <-c:
@@ -1190,10 +1188,7 @@ var _ = Describe("Discord Player", func() {
 				}),
 			)
 
-			go func() {
-				time.Sleep(1 * time.Second)
-				cancel()
-			}()
+			cancel()
 
 			select {
 			case <-c:
@@ -1222,9 +1217,13 @@ var _ = Describe("Discord Player", func() {
 
 			go func() {
 				currentMediaDone <- nil
-				time.Sleep(2 * time.Second)
-				cancel()
 			}()
+
+			Eventually(func() entities.Media {
+				return playerContext.dms.GetCurrentlyPlayingMedia()
+			}).WithTimeout(2 * time.Second).WithPolling(50 * time.Millisecond).Should(BeNil())
+
+			cancel()
 
 			select {
 			case <-c:
