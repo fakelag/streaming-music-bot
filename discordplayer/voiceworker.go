@@ -95,6 +95,9 @@ func (dms *DiscordMusicSession) playMediaFile(
 	keepPlayingCurrentMedia bool,
 	keepPlayingCurrentMediaFrom time.Duration,
 ) {
+	keepPlayingCurrentMedia = false
+	keepPlayingCurrentMediaFrom = time.Duration(0)
+
 	playMediaCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -131,6 +134,7 @@ func (dms *DiscordMusicSession) playMediaFile(
 
 	select {
 	case err = <-session.done:
+		playbackPosition := session.streamingSession.PlaybackPosition()
 		dms.cleanupEncodingAndVoiceSession(session.encodingSession, dms.voiceConnection)
 
 		if err == nil || err == io.EOF {
@@ -145,7 +149,7 @@ func (dms *DiscordMusicSession) playMediaFile(
 		mediaFileDuration := mediaFile.Duration()
 
 		if mediaFileDuration != nil {
-			mediaDurationLeft := *mediaFile.Duration() - session.streamingSession.PlaybackPosition()
+			mediaDurationLeft := *mediaFileDuration - playbackPosition
 
 			if mediaDurationLeft.Seconds() < 2 {
 				// No more content to play, done
@@ -156,7 +160,7 @@ func (dms *DiscordMusicSession) playMediaFile(
 		keepPlayingCurrentMedia = true
 
 		if mediaFile.CanJumpToTimeStamp() {
-			keepPlayingCurrentMediaFrom = session.streamingSession.PlaybackPosition()
+			keepPlayingCurrentMediaFrom = playbackPosition
 		}
 
 		return
