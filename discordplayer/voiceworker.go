@@ -266,6 +266,10 @@ func (dms *DiscordMusicSession) checkDiscordVoiceConnection() error {
 		return nil
 	}
 
+	if dms.voiceConnection != nil {
+		_ = dms.voiceConnection.Disconnect()
+	}
+
 	dms.mutex.RLock()
 	voiceChannelID := dms.voiceChannelID
 	dms.mutex.RUnlock()

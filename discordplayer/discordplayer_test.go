@@ -1008,6 +1008,7 @@ var _ = Describe("Discord Player", func() {
 			gomock.InOrder(
 				playerContext.mockVoiceConnection.EXPECT().Speaking(false),
 				playerContext.mockVoiceConnection.EXPECT().IsReady().Return(false),
+				playerContext.mockVoiceConnection.EXPECT().Disconnect(),
 				playerContext.mockDiscordSession.EXPECT().
 					ChannelVoiceJoin(playerContext.guildID, playerContext.channelID, false, false).
 					Return(playerContext.mockVoiceConnection, nil),
@@ -1066,6 +1067,7 @@ var _ = Describe("Discord Player", func() {
 				playerContext.mockVoiceConnection.EXPECT().Speaking(false),
 				mockDcaStreamingSession.EXPECT().PlaybackPosition().Return(10*time.Second).MinTimes(1),
 				playerContext.mockVoiceConnection.EXPECT().IsReady().Return(false),
+				playerContext.mockVoiceConnection.EXPECT().Disconnect(),
 				playerContext.mockDiscordSession.EXPECT().
 					ChannelVoiceJoin(playerContext.guildID, playerContext.channelID, false, false).
 					Return(playerContext.mockVoiceConnection, nil),
