@@ -11,6 +11,7 @@ import (
 	"github.com/fakelag/streaming-music-bot/entities"
 
 	"github.com/fakelag/dca"
+	// . "github.com/onsi/ginkgo/v2"
 )
 
 type DcaMediaSession struct {
@@ -134,7 +135,6 @@ func (dms *DiscordMusicSession) playMediaFile(
 
 	select {
 	case err = <-session.done:
-		playbackPosition := session.streamingSession.PlaybackPosition()
 		dms.cleanupEncodingAndVoiceSession(session.encodingSession, dms.voiceConnection)
 
 		if err == nil || err == io.EOF {
@@ -149,7 +149,7 @@ func (dms *DiscordMusicSession) playMediaFile(
 		mediaFileDuration := mediaFile.Duration()
 
 		if mediaFileDuration != nil {
-			mediaDurationLeft := *mediaFileDuration - playbackPosition
+			mediaDurationLeft := *mediaFileDuration - session.streamingSession.PlaybackPosition()
 
 			if mediaDurationLeft.Seconds() < 2 {
 				// No more content to play, done
@@ -160,7 +160,7 @@ func (dms *DiscordMusicSession) playMediaFile(
 		keepPlayingCurrentMedia = true
 
 		if mediaFile.CanJumpToTimeStamp() {
-			keepPlayingCurrentMediaFrom = playbackPosition
+			keepPlayingCurrentMediaFrom = session.streamingSession.PlaybackPosition()
 		}
 
 		return
