@@ -151,7 +151,16 @@ func (yt *Youtube) SearchYoutubeMedia(numSearchResults int, videoIdOrSearchTerm 
 
 	for i := 0; i < len(jsonLines); i += 2 {
 		videoStreamURL := jsonLines[i]
+
+		if videoStreamURL == "" {
+			continue
+		}
+
 		videoJson := jsonLines[i+1]
+
+		if videoJson == "" {
+			continue
+		}
 
 		var object YtDlpObject
 		if err := json.Unmarshal([]byte(videoJson), &object); err != nil {
