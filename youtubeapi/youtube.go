@@ -112,7 +112,6 @@ func (yt *Youtube) SearchYoutubeMedia(numSearchResults int, videoIdOrSearchTerm 
 
 	args := []string{
 		videoArg,
-		"--playlist-end", "1",
 		"--extract-audio",
 		"--quiet",
 		"--audio-format", "opus",
