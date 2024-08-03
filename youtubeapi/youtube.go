@@ -3,6 +3,7 @@ package youtubeapi
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math/rand"
 	"net/url"
 	"os/exec"
@@ -80,6 +81,88 @@ func (yt *Youtube) SetCmdExecutor(exec cmd.CommandExecutor) {
 	yt.executor = exec
 }
 
+func (yt *Youtube) SearchYoutubeMedia(numSearchResults int, videoIdOrSearchTerm string) ([]*YoutubeMedia, error) {
+	ytDlp, err := getYtDlpPath()
+
+	if err != nil {
+		return nil, err
+	}
+
+	replacer := strings.NewReplacer(
+		"\"", "",
+		"'", "",
+	)
+
+	videoArg := fmt.Sprintf("ytsearch%d:%s", numSearchResults, replacer.Replace(videoIdOrSearchTerm))
+
+	args := []string{
+		videoArg,
+		"--playlist-end", "1",
+		"--extract-audio",
+		"--quiet",
+		"--audio-format", "opus",
+		"--ignore-errors",
+		"--no-color",
+		"--no-check-formats",
+		"--max-downloads", "0",
+		"-s",
+		"--get-url",
+		"--print-json",
+	}
+
+	resultChannel, errorChannel := yt.executor.RunCommandWithTimeout(ytDlp, yt.streamUrlTimeout, args...)
+
+	var stdout string
+
+	select {
+	case result := <-resultChannel:
+		stdout = *result
+		break
+	case err := <-errorChannel:
+		return nil, err
+	}
+
+	searchResults := make([]*YoutubeMedia, 0)
+
+	if len(stdout) == 0 {
+		return searchResults, nil
+	}
+
+	jsonLines := strings.Split(stdout, "\n")
+
+	if len(jsonLines) < 2 {
+		return searchResults, nil
+	}
+
+	for i := 0; i < len(jsonLines); i += 2 {
+		videoStreamURL := jsonLines[i]
+		videoJson := jsonLines[i+1]
+
+		var object YtDlpObject
+		if err := json.Unmarshal([]byte(videoJson), &object); err != nil {
+			return nil, err
+		}
+
+		if object.Type != "video" {
+			continue
+		}
+
+		media, _, err := yt.getMediaOrPlaylistFromJsonAndStreamURL(&object, videoJson, videoStreamURL)
+
+		if err != nil {
+			return nil, err
+		}
+
+		if media == nil {
+			continue
+		}
+
+		searchResults = append(searchResults, media)
+	}
+
+	return searchResults, nil
+}
+
 func (yt *Youtube) GetYoutubeMedia(videoIdOrSearchTerm string) (*YoutubeMedia, error) {
 	ytDlp, err := getYtDlpPath()
 
@@ -146,38 +229,12 @@ func (yt *Youtube) GetYoutubeMedia(videoIdOrSearchTerm string) (*YoutubeMedia, e
 		return nil, err
 	}
 
-	if object.Type == "video" {
-		var ytDlpVideo YtDlpVideo
-		if err := json.Unmarshal([]byte(videoJson), &ytDlpVideo); err != nil {
-			return nil, err
-		}
-
-		media := &YoutubeMedia{
-			ID:                ytDlpVideo.ID,
-			VideoTitle:        ytDlpVideo.Title,
-			VideoThumbnail:    ytDlpVideo.Thumbnail,
-			VideoIsLiveStream: ytDlpVideo.IsLiveStream,
-			VideoDuration:     time.Duration(ytDlpVideo.Duration) * time.Second,
-			VideoLink:         "https://www.youtube.com/watch?v=" + ytDlpVideo.ID,
-			StreamURL:         videoStreamURL,
-			ytAPI:             yt,
-		}
-
-		streamExpireUnixSecondsMatch := yt.streamUrlExpireRegex.FindStringSubmatch(videoStreamURL)
-
-		if len(streamExpireUnixSecondsMatch) >= 4 {
-			unixSeconds, err := strconv.ParseInt(streamExpireUnixSecondsMatch[3], 10, 64)
-
-			if err == nil && unixSeconds > 0 {
-				expirationTime := time.Unix(unixSeconds, 0)
-				media.StreamExpiresAt = &expirationTime
-			}
-		}
-
-		return media, nil
-	} else {
+	if object.Type != "video" {
 		return nil, ErrorUnrecognisedObject
 	}
+
+	media, _, err := yt.getMediaOrPlaylistFromJsonAndStreamURL(&object, videoJson, videoStreamURL)
+	return media, err
 }
 
 func (yt *Youtube) GetYoutubePlaylist(playlistIdOrUrl string) (*YoutubePlaylist, error) {
@@ -229,40 +286,8 @@ func (yt *Youtube) GetYoutubePlaylist(playlistIdOrUrl string) (*YoutubePlaylist,
 		return nil, ErrorUnrecognisedObject
 	}
 
-	var ytDlpPlaylist YtDlpPlayList
-	if err := json.Unmarshal([]byte(playlistJson), &ytDlpPlaylist); err != nil {
-		return nil, err
-	}
-
-	rngSource := rand.NewSource(time.Now().Unix())
-	rng := rand.New(rngSource)
-
-	playList := NewYoutubePlaylist(ytDlpPlaylist.ID, ytDlpPlaylist.Title, ytDlpPlaylist.PlaylistURL, rng, len(ytDlpPlaylist.Entries))
-
-	for index, video := range ytDlpPlaylist.Entries {
-		thumbnailUrl := ""
-		thumbnailWidth := 0
-
-		for _, thumbnail := range video.Thumbnails {
-			if thumbnail.Width > thumbnailWidth {
-				thumbnailUrl = thumbnail.URL
-				thumbnailWidth = thumbnail.Width
-			}
-		}
-
-		playList.mediaList[index] = &YoutubeMedia{
-			ID:                video.ID,
-			VideoTitle:        video.Title,
-			VideoThumbnail:    thumbnailUrl,
-			VideoIsLiveStream: video.LiveStatus == "is_live",
-			VideoDuration:     time.Duration(video.Duration) * time.Second,
-			VideoLink:         "https://www.youtube.com/watch?v=" + video.ID,
-			StreamURL:         "",
-			ytAPI:             yt,
-		}
-	}
-
-	return playList, nil
+	_, playList, err := yt.getMediaOrPlaylistFromJsonAndStreamURL(&object, playlistJson, "")
+	return playList, err
 }
 
 func NewYoutubePlaylist(
@@ -310,6 +335,80 @@ func getYoutubeUrlVideoId(urlString string) string {
 	}
 
 	return ""
+}
+
+func (yt *Youtube) getMediaOrPlaylistFromJsonAndStreamURL(
+	object *YtDlpObject,
+	ytdlpJson string,
+	videoStreamURL string,
+) (*YoutubeMedia, *YoutubePlaylist, error) {
+	if object.Type == "video" {
+		var ytDlpVideo YtDlpVideo
+		if err := json.Unmarshal([]byte(ytdlpJson), &ytDlpVideo); err != nil {
+			return nil, nil, err
+		}
+
+		media := &YoutubeMedia{
+			ID:                ytDlpVideo.ID,
+			VideoTitle:        ytDlpVideo.Title,
+			VideoThumbnail:    ytDlpVideo.Thumbnail,
+			VideoIsLiveStream: ytDlpVideo.IsLiveStream,
+			VideoDuration:     time.Duration(ytDlpVideo.Duration) * time.Second,
+			VideoLink:         "https://www.youtube.com/watch?v=" + ytDlpVideo.ID,
+			StreamURL:         videoStreamURL,
+			ytAPI:             yt,
+		}
+
+		streamExpireUnixSecondsMatch := yt.streamUrlExpireRegex.FindStringSubmatch(videoStreamURL)
+
+		if len(streamExpireUnixSecondsMatch) >= 4 {
+			unixSeconds, err := strconv.ParseInt(streamExpireUnixSecondsMatch[3], 10, 64)
+
+			if err == nil && unixSeconds > 0 {
+				expirationTime := time.Unix(unixSeconds, 0)
+				media.StreamExpiresAt = &expirationTime
+			}
+		}
+
+		return media, nil, nil
+	} else if object.Type == "playlist" {
+		var ytDlpPlaylist YtDlpPlayList
+		if err := json.Unmarshal([]byte(ytdlpJson), &ytDlpPlaylist); err != nil {
+			return nil, nil, err
+		}
+
+		rngSource := rand.NewSource(time.Now().Unix())
+		rng := rand.New(rngSource)
+
+		playList := NewYoutubePlaylist(ytDlpPlaylist.ID, ytDlpPlaylist.Title, ytDlpPlaylist.PlaylistURL, rng, len(ytDlpPlaylist.Entries))
+
+		for index, video := range ytDlpPlaylist.Entries {
+			thumbnailUrl := ""
+			thumbnailWidth := 0
+
+			for _, thumbnail := range video.Thumbnails {
+				if thumbnail.Width > thumbnailWidth {
+					thumbnailUrl = thumbnail.URL
+					thumbnailWidth = thumbnail.Width
+				}
+			}
+
+			playList.mediaList[index] = &YoutubeMedia{
+				ID:                video.ID,
+				VideoTitle:        video.Title,
+				VideoThumbnail:    thumbnailUrl,
+				VideoIsLiveStream: video.LiveStatus == "is_live",
+				VideoDuration:     time.Duration(video.Duration) * time.Second,
+				VideoLink:         "https://www.youtube.com/watch?v=" + video.ID,
+				StreamURL:         "",
+				ytAPI:             yt,
+			}
+		}
+
+		return nil, playList, nil
+	} else {
+		return nil, nil, ErrorUnrecognisedObject
+	}
 }
 
 func getYtDlpPath() (string, error) {

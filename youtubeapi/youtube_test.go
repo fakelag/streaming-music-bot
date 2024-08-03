@@ -13,14 +13,16 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var mockVideoJson string = strings.ReplaceAll(`{
-	"id": "123",
-	"fulltitle": "Mock Title",
-	"duration": 70,
-	"thumbnail": "foo",
-	"is_live": false,
-	"_type": "video"
-}`, "\n", "")
+func makeMockVideoJson(id string, title string) string {
+	return strings.ReplaceAll(fmt.Sprintf(`{
+		"id": "%s",
+		"fulltitle": "%s",
+		"duration": 70,
+		"thumbnail": "foo",
+		"is_live": false,
+		"_type": "video"
+	}`, id, title), "\n", "")
+}
 
 var mockPlaylistJson string = strings.ReplaceAll(`{
 	"id": "1234",
@@ -78,7 +80,7 @@ var _ = Describe("YT Download", func() {
 	When("Downloading a singular video", func() {
 		It("Downloads a video stream URL from Youtube", func() {
 			mockExecutor := &testutils.MockCommandExecutor{
-				MockStdoutResult: "url123\n" + mockVideoJson,
+				MockStdoutResult: "url123\n" + makeMockVideoJson("123", "Mock Title"),
 			}
 
 			yt := youtubeapi.NewYoutubeAPI()
@@ -106,7 +108,7 @@ var _ = Describe("YT Download", func() {
 				"https://rr5---sn-qo5-ixas.googlevideo.com/videoplayback?expire=" + fmt.Sprintf("%d", timeUnix) + "&ei=123&foo=bar\n",
 			} {
 				mockExecutor := &testutils.MockCommandExecutor{
-					MockStdoutResult: streamUrl + mockVideoJson,
+					MockStdoutResult: streamUrl + makeMockVideoJson("123", "Mock Title"),
 				}
 
 				yt := youtubeapi.NewYoutubeAPI()
@@ -225,6 +227,83 @@ var _ = Describe("YT Download", func() {
 
 			_, err = yt.GetYoutubePlaylist("foo")
 			Expect(err).To(MatchError(youtubeapi.ErrorNoPlaylistFound))
+		})
+	})
+
+	When("Searching from youtube", func() {
+		It("Downloads a video stream URL from Youtube", func() {
+			lines := []string{
+				"url4video1",
+				makeMockVideoJson("1", "Video 1"),
+				"url4video2",
+				makeMockVideoJson("2", "Video 2"),
+				"url4video3",
+				makeMockVideoJson("3", "Video 3"),
+			}
+			mockExecutor := &testutils.MockCommandExecutor{
+				MockStdoutResult: strings.Join(lines, "\n"),
+			}
+
+			yt := youtubeapi.NewYoutubeAPI()
+			yt.SetCmdExecutor(mockExecutor)
+
+			searchResults, err := yt.SearchYoutubeMedia(3, "foo")
+
+			Expect(err).To(BeNil())
+			Expect(searchResults).NotTo(BeNil())
+			Expect(searchResults).To(HaveLen(3))
+
+			vid := searchResults[0]
+			Expect(vid).NotTo(BeNil())
+			Expect(vid.ID).To(Equal("1"))
+			Expect(vid.Title()).To(Equal("Video 1"))
+			Expect(vid.FileURL()).To(Equal("url4video1"))
+			Expect(vid.Thumbnail()).To(Equal("foo"))
+
+			vid = searchResults[1]
+			Expect(vid).NotTo(BeNil())
+			Expect(vid.ID).To(Equal("2"))
+			Expect(vid.Title()).To(Equal("Video 2"))
+			Expect(vid.FileURL()).To(Equal("url4video2"))
+			Expect(vid.Thumbnail()).To(Equal("foo"))
+
+			vid = searchResults[2]
+			Expect(vid).NotTo(BeNil())
+			Expect(vid.ID).To(Equal("3"))
+			Expect(vid.Title()).To(Equal("Video 3"))
+			Expect(vid.FileURL()).To(Equal("url4video3"))
+			Expect(vid.Thumbnail()).To(Equal("foo"))
+		})
+
+		It("Returns sensible results when receiving an invalid response from ytdlp", func() {
+			mockExecutor := &testutils.MockCommandExecutor{
+				MockStdoutResult: "streamurl\n{",
+			}
+
+			yt := youtubeapi.NewYoutubeAPI()
+			yt.SetCmdExecutor(mockExecutor)
+
+			searchResults, err := yt.SearchYoutubeMedia(5, "foo")
+			Expect(err).To(MatchError("unexpected end of JSON input"))
+			Expect(searchResults).To(BeNil())
+
+			mockExecutor.MockStdoutResult = "streamurl\n{\"_type\":\"something\"}"
+
+			searchResults, err = yt.SearchYoutubeMedia(5, "foo")
+			Expect(err).To(BeNil())
+			Expect(searchResults).To(HaveLen(0))
+
+			mockExecutor.MockStdoutResult = "streamurl"
+
+			searchResults, err = yt.SearchYoutubeMedia(5, "foo")
+			Expect(err).To(BeNil())
+			Expect(searchResults).To(HaveLen(0))
+
+			mockExecutor.MockStdoutResult = ""
+
+			searchResults, err = yt.SearchYoutubeMedia(5, "foo")
+			Expect(err).To(BeNil())
+			Expect(searchResults).To(HaveLen(0))
 		})
 	})
 })
