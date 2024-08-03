@@ -29,13 +29,14 @@ type YtDlpObject struct {
 }
 
 type YtDlpVideoFormat struct {
-	FormatID   string  `json:"format_id"`
-	Format     string  `json:"format"`
-	Ext        string  `json:"ext"`
-	Url        string  `json:"url"`
-	Fps        float64 `json:"fps"`
-	Resolution string  `json:"resolution"`
-	FileSize   int     `json:"filesize"`
+	FormatID       string  `json:"format_id"`
+	Format         string  `json:"format"`
+	Ext            string  `json:"ext"`
+	Url            string  `json:"url"`
+	Fps            float64 `json:"fps"`
+	Resolution     string  `json:"resolution"`
+	FileSize       int     `json:"filesize"`
+	FileSizeApprox int     `json:"filesize_approx"`
 }
 
 type YtDlpVideo struct {
