@@ -28,6 +28,16 @@ type YtDlpObject struct {
 	Type string `json:"_type"`
 }
 
+type YtDlpVideoFormat struct {
+	FormatID   string  `json:"format_id"`
+	Format     string  `json:"format"`
+	Ext        string  `json:"ext"`
+	Url        string  `json:"url"`
+	Fps        float64 `json:"fps"`
+	Resolution string  `json:"resolution"`
+	FileSize   int     `json:"filesize"`
+}
+
 type YtDlpVideo struct {
 	YtDlpObject
 	ID           string `json:"id"`
@@ -35,6 +45,11 @@ type YtDlpVideo struct {
 	Duration     int    `json:"duration"`
 	Thumbnail    string `json:"thumbnail"`
 	IsLiveStream bool   `json:"is_live"`
+}
+
+type YtDlpVideoWithFormats struct {
+	YtDlpVideo
+	Formats []*YtDlpVideoFormat `json:"formats"`
 }
 
 type YtDlpPlayListThumbnail struct {
@@ -288,6 +303,79 @@ func (yt *Youtube) GetYoutubePlaylist(playlistIdOrUrl string) (*YoutubePlaylist,
 
 	_, playList, err := yt.getMediaOrPlaylistFromJsonAndStreamURL(&object, playlistJson, "")
 	return playList, err
+}
+
+func (yt *Youtube) ListFormats(videoIdOrUrl string) ([]*YtDlpVideoFormat, error) {
+	ytDlp, err := getYtDlpPath()
+
+	if err != nil {
+		return nil, err
+	}
+
+	videoArg := videoIdOrUrl
+	videoID := getYoutubeUrlVideoId(videoIdOrUrl)
+
+	if videoID == "" {
+		videoArg = videoIdOrUrl
+	} else {
+		videoArg = "https://www.youtube.com/watch?v=" + videoID
+	}
+
+	replacer := strings.NewReplacer(
+		"\"", "",
+		"'", "",
+	)
+
+	args := []string{
+		replacer.Replace(videoArg),
+		"--playlist-end", "1",
+		"--quiet",
+		"--ignore-errors",
+		"--no-color",
+		"--max-downloads", "0",
+		"-s",
+		"--print-json",
+	}
+
+	resultChannel, errorChannel := yt.executor.RunCommandWithTimeout(ytDlp, yt.streamUrlTimeout, args...)
+
+	var stdout string
+
+	select {
+	case result := <-resultChannel:
+		stdout = *result
+		break
+	case err := <-errorChannel:
+		return nil, err
+	}
+
+	if len(stdout) == 0 {
+		return nil, ErrorNoVideoFound
+	}
+
+	jsonLines := strings.Split(stdout, "\n")
+
+	if len(jsonLines) < 1 {
+		return nil, ErrorInvalidYtdlpData
+	}
+
+	videoJson := jsonLines[0]
+
+	var object YtDlpObject
+	if err := json.Unmarshal([]byte(videoJson), &object); err != nil {
+		return nil, err
+	}
+
+	if object.Type != "video" {
+		return nil, ErrorUnrecognisedObject
+	}
+
+	var videoWithFormats YtDlpVideoWithFormats
+	if err := json.Unmarshal([]byte(videoJson), &videoWithFormats); err != nil {
+		return nil, err
+	}
+
+	return videoWithFormats.Formats, nil
 }
 
 func NewYoutubePlaylist(

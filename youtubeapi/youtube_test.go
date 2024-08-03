@@ -20,6 +20,22 @@ func makeMockVideoJson(id string, title string) string {
 		"duration": 70,
 		"thumbnail": "foo",
 		"is_live": false,
+		"formats": [{
+            "format_id": "312",
+            "url": "formaturl.com/312",
+            "ext": "mp4",
+            "fps": 60.0,
+            "resolution": "1920x1080",
+            "format": "312 - 1920x1080"
+		}, {
+			"filesize": 19847,
+			"format_id": "303",
+			"fps": 60,
+			"url": "formaturl.com/303",
+			"ext": "webm",
+			"resolution": "1920x1080",
+			"format": "303 - 1920x1080 (1080p60)"
+		}],
 		"_type": "video"
 	}`, id, title), "\n", "")
 }
@@ -304,6 +320,63 @@ var _ = Describe("YT Download", func() {
 			searchResults, err = yt.SearchYoutubeMedia(5, "foo")
 			Expect(err).To(BeNil())
 			Expect(searchResults).To(HaveLen(0))
+		})
+	})
+
+	When("Listing formats for a video", func() {
+		It("Lists formats for a video id", func() {
+			lines := []string{
+				makeMockVideoJson("123", "Mock Title 1"),
+			}
+			mockExecutor := &testutils.MockCommandExecutor{
+				MockStdoutResult: strings.Join(lines, "\n"),
+			}
+
+			yt := youtubeapi.NewYoutubeAPI()
+			yt.SetCmdExecutor(mockExecutor)
+
+			formatList, err := yt.ListFormats("123")
+
+			Expect(err).To(BeNil())
+			Expect(formatList).To(HaveLen(2))
+
+			format := formatList[0]
+			Expect(format).NotTo(BeNil())
+			Expect(format.FormatID).To(Equal("312"))
+			Expect(format.Url).To(Equal("formaturl.com/312"))
+			Expect(format.Ext).To(Equal("mp4"))
+			Expect(format.Fps).To(Equal(60.0))
+			Expect(format.Resolution).To(Equal("1920x1080"))
+			Expect(format.Format).To(Equal("312 - 1920x1080"))
+
+			format = formatList[1]
+			Expect(format).NotTo(BeNil())
+			Expect(format.FormatID).To(Equal("303"))
+		})
+
+		It("Returns sensible results when receiving an invalid response from ytdlp", func() {
+			mockExecutor := &testutils.MockCommandExecutor{
+				MockStdoutResult: "{",
+			}
+
+			yt := youtubeapi.NewYoutubeAPI()
+			yt.SetCmdExecutor(mockExecutor)
+
+			formatList, err := yt.ListFormats("foo")
+			Expect(err).To(MatchError("unexpected end of JSON input"))
+			Expect(formatList).To(BeNil())
+
+			mockExecutor.MockStdoutResult = "{\"_type\":\"something\"}"
+
+			formatList, err = yt.ListFormats("foo")
+			Expect(err).To(MatchError(youtubeapi.ErrorUnrecognisedObject))
+			Expect(formatList).To(BeNil())
+
+			mockExecutor.MockStdoutResult = ""
+
+			formatList, err = yt.ListFormats("foo")
+			Expect(err).To(MatchError(youtubeapi.ErrorNoVideoFound))
+			Expect(formatList).To(BeNil())
 		})
 	})
 })
