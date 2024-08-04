@@ -98,12 +98,6 @@ func (yt *Youtube) SetCmdExecutor(exec cmd.CommandExecutor) {
 }
 
 func (yt *Youtube) SearchYoutubeMedia(numSearchResults int, videoIdOrSearchTerm string) ([]*YoutubeMedia, error) {
-	ytDlp, err := getYtDlpPath()
-
-	if err != nil {
-		return nil, err
-	}
-
 	replacer := strings.NewReplacer(
 		"\"", "",
 		"'", "",
@@ -125,25 +119,19 @@ func (yt *Youtube) SearchYoutubeMedia(numSearchResults int, videoIdOrSearchTerm 
 		"--print-json",
 	}
 
-	resultChannel, errorChannel := yt.executor.RunCommandWithTimeout(ytDlp, yt.streamUrlTimeout, args...)
+	stdout, err := yt.YtDlpExec(yt.streamUrlTimeout, args)
 
-	var stdout string
-
-	select {
-	case result := <-resultChannel:
-		stdout = *result
-		break
-	case err := <-errorChannel:
+	if err != nil {
 		return nil, err
 	}
 
 	searchResults := make([]*YoutubeMedia, 0)
 
-	if len(stdout) == 0 {
+	if len(*stdout) == 0 {
 		return searchResults, nil
 	}
 
-	jsonLines := strings.Split(stdout, "\n")
+	jsonLines := strings.Split(*stdout, "\n")
 
 	if len(jsonLines) < 2 {
 		return searchResults, nil
@@ -188,12 +176,6 @@ func (yt *Youtube) SearchYoutubeMedia(numSearchResults int, videoIdOrSearchTerm 
 }
 
 func (yt *Youtube) GetYoutubeMedia(videoIdOrSearchTerm string) (*YoutubeMedia, error) {
-	ytDlp, err := getYtDlpPath()
-
-	if err != nil {
-		return nil, err
-	}
-
 	videoArg := videoIdOrSearchTerm
 
 	videoID := getYoutubeUrlVideoId(videoIdOrSearchTerm)
@@ -223,23 +205,17 @@ func (yt *Youtube) GetYoutubeMedia(videoIdOrSearchTerm string) (*YoutubeMedia, e
 		"--print-json",
 	}
 
-	resultChannel, errorChannel := yt.executor.RunCommandWithTimeout(ytDlp, yt.streamUrlTimeout, args...)
+	stdout, err := yt.YtDlpExec(yt.streamUrlTimeout, args)
 
-	var stdout string
-
-	select {
-	case result := <-resultChannel:
-		stdout = *result
-		break
-	case err := <-errorChannel:
+	if err != nil {
 		return nil, err
 	}
 
-	if len(stdout) == 0 {
+	if len(*stdout) == 0 {
 		return nil, ErrorNoVideoFound
 	}
 
-	urlAndJson := strings.Split(stdout, "\n")
+	urlAndJson := strings.Split(*stdout, "\n")
 
 	if len(urlAndJson) < 2 {
 		return nil, ErrorInvalidYtdlpData
@@ -262,12 +238,6 @@ func (yt *Youtube) GetYoutubeMedia(videoIdOrSearchTerm string) (*YoutubeMedia, e
 }
 
 func (yt *Youtube) GetYoutubePlaylist(playlistIdOrUrl string) (*YoutubePlaylist, error) {
-	ytDlp, err := getYtDlpPath()
-
-	if err != nil {
-		return nil, err
-	}
-
 	replacer := strings.NewReplacer(
 		"\"", "",
 		"'", "",
@@ -285,24 +255,18 @@ func (yt *Youtube) GetYoutubePlaylist(playlistIdOrUrl string) (*YoutubePlaylist,
 		"--flat-playlist",
 	}
 
-	resultChannel, errorChannel := yt.executor.RunCommandWithTimeout(ytDlp, yt.streamUrlTimeout, args...)
+	stdout, err := yt.YtDlpExec(yt.streamUrlTimeout, args)
 
-	var playlistJson string
-
-	select {
-	case result := <-resultChannel:
-		playlistJson = *result
-		break
-	case err := <-errorChannel:
+	if err != nil {
 		return nil, err
 	}
 
-	if len(playlistJson) == 0 {
+	if len(*stdout) == 0 {
 		return nil, ErrorNoPlaylistFound
 	}
 
 	var object YtDlpObject
-	if err := json.Unmarshal([]byte(playlistJson), &object); err != nil {
+	if err := json.Unmarshal([]byte(*stdout), &object); err != nil {
 		return nil, err
 	}
 
@@ -310,17 +274,11 @@ func (yt *Youtube) GetYoutubePlaylist(playlistIdOrUrl string) (*YoutubePlaylist,
 		return nil, ErrorUnrecognisedObject
 	}
 
-	_, playList, err := yt.getMediaOrPlaylistFromJsonAndStreamURL(&object, playlistJson, "")
+	_, playList, err := yt.getMediaOrPlaylistFromJsonAndStreamURL(&object, *stdout, "")
 	return playList, err
 }
 
 func (yt *Youtube) ListFormats(videoIdOrUrl string) ([]*YtDlpVideoFormat, error) {
-	ytDlp, err := getYtDlpPath()
-
-	if err != nil {
-		return nil, err
-	}
-
 	videoArg := videoIdOrUrl
 	videoID := getYoutubeUrlVideoId(videoIdOrUrl)
 
@@ -346,23 +304,17 @@ func (yt *Youtube) ListFormats(videoIdOrUrl string) ([]*YtDlpVideoFormat, error)
 		"--print-json",
 	}
 
-	resultChannel, errorChannel := yt.executor.RunCommandWithTimeout(ytDlp, yt.streamUrlTimeout, args...)
+	stdout, err := yt.YtDlpExec(yt.streamUrlTimeout, args)
 
-	var stdout string
-
-	select {
-	case result := <-resultChannel:
-		stdout = *result
-		break
-	case err := <-errorChannel:
+	if err != nil {
 		return nil, err
 	}
 
-	if len(stdout) == 0 {
+	if len(*stdout) == 0 {
 		return nil, ErrorNoVideoFound
 	}
 
-	jsonLines := strings.Split(stdout, "\n")
+	jsonLines := strings.Split(*stdout, "\n")
 
 	if len(jsonLines) < 1 {
 		return nil, ErrorInvalidYtdlpData
@@ -385,6 +337,23 @@ func (yt *Youtube) ListFormats(videoIdOrUrl string) ([]*YtDlpVideoFormat, error)
 	}
 
 	return videoWithFormats.Formats, nil
+}
+
+func (yt *Youtube) YtDlpExec(timeout time.Duration, args []string) (*string, error) {
+	ytDlp, err := getYtDlpPath()
+
+	if err != nil {
+		return nil, err
+	}
+
+	resultChannel, errorChannel := yt.executor.RunCommandWithTimeout(ytDlp, timeout, args...)
+
+	select {
+	case result := <-resultChannel:
+		return result, nil
+	case err := <-errorChannel:
+		return nil, err
+	}
 }
 
 func NewYoutubePlaylist(
