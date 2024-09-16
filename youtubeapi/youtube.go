@@ -81,6 +81,7 @@ type Youtube struct {
 	executor             cmd.CommandExecutor
 	streamUrlTimeout     time.Duration
 	streamUrlExpireRegex *regexp.Regexp
+	ytdlpArgs            []string
 }
 
 func NewYoutubeAPI() *Youtube {
@@ -88,6 +89,7 @@ func NewYoutubeAPI() *Youtube {
 		executor:             &cmd.DefaultCommandExecutor{},
 		streamUrlTimeout:     time.Second * 30,
 		streamUrlExpireRegex: regexp.MustCompile("(expire)(\\/|=)(\\d+)(\\/|=|&|$)"),
+		ytdlpArgs:            make([]string, 0),
 	}
 
 	return yt
@@ -95,6 +97,10 @@ func NewYoutubeAPI() *Youtube {
 
 func (yt *Youtube) SetCmdExecutor(exec cmd.CommandExecutor) {
 	yt.executor = exec
+}
+
+func (yt *Youtube) SetYtDlpArgs(extraArgs []string) {
+	yt.ytdlpArgs = extraArgs
 }
 
 func (yt *Youtube) SearchYoutubeMedia(numSearchResults int, videoIdOrSearchTerm string) ([]*YoutubeMedia, error) {
@@ -117,6 +123,10 @@ func (yt *Youtube) SearchYoutubeMedia(numSearchResults int, videoIdOrSearchTerm 
 		"-s",
 		"--get-url",
 		"--print-json",
+	}
+
+	if len(yt.ytdlpArgs) > 0 {
+		args = append(args, yt.ytdlpArgs...)
 	}
 
 	stdout, err := yt.YtDlpExec(yt.streamUrlTimeout, args)
@@ -205,6 +215,10 @@ func (yt *Youtube) GetYoutubeMedia(videoIdOrSearchTerm string) (*YoutubeMedia, e
 		"--print-json",
 	}
 
+	if len(yt.ytdlpArgs) > 0 {
+		args = append(args, yt.ytdlpArgs...)
+	}
+
 	stdout, err := yt.YtDlpExec(yt.streamUrlTimeout, args)
 
 	if err != nil {
@@ -255,6 +269,10 @@ func (yt *Youtube) GetYoutubePlaylist(playlistIdOrUrl string) (*YoutubePlaylist,
 		"--flat-playlist",
 	}
 
+	if len(yt.ytdlpArgs) > 0 {
+		args = append(args, yt.ytdlpArgs...)
+	}
+
 	stdout, err := yt.YtDlpExec(yt.streamUrlTimeout, args)
 
 	if err != nil {
@@ -302,6 +320,10 @@ func (yt *Youtube) ListFormats(videoIdOrUrl string) ([]*YtDlpVideoFormat, error)
 		"--max-downloads", "0",
 		"-s",
 		"--print-json",
+	}
+
+	if len(yt.ytdlpArgs) > 0 {
+		args = append(args, yt.ytdlpArgs...)
 	}
 
 	stdout, err := yt.YtDlpExec(yt.streamUrlTimeout, args)
